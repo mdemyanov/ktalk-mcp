@@ -163,3 +163,63 @@ class TestFormatRecordingsList:
         }
         result = format_recordings_list(data)
         assert "page_token" not in result
+
+
+class TestFormatRecording:
+    def test_full_recording(self):
+        from ktalk_mcp.formatters import format_recording
+
+        data = {
+            "key": "rec-abc-123",
+            "title": "Стендап команды",
+            "createdDate": "2026-04-01T10:00:00Z",
+            "createdBy": {
+                "surname": "Иванов",
+                "firstname": "Иван",
+                "login": "iivanov",
+            },
+            "roomName": "standup-room",
+            "duration": 2700,
+            "participantsCount": 3,
+            "participants": [
+                {
+                    "userInfo": {"surname": "Иванов", "firstname": "Иван"},
+                    "isAnonymous": False,
+                },
+                {
+                    "userInfo": {"surname": "Петрова", "firstname": "Мария"},
+                    "isAnonymous": False,
+                },
+                {
+                    "anonymousName": "Гость",
+                    "userInfo": None,
+                    "isAnonymous": True,
+                },
+            ],
+        }
+
+        result = format_recording(data)
+        assert "# Стендап команды" in result
+        assert "rec-abc-123" in result
+        assert "2026-04-01 10:00" in result
+        assert "Иванов Иван" in result
+        assert "standup-room" in result
+        assert "45 мин" in result
+        assert "Петрова Мария" in result
+        assert "Гость" in result
+
+    def test_recording_no_participants(self):
+        from ktalk_mcp.formatters import format_recording
+
+        data = {
+            "key": "rec-001",
+            "title": "Solo",
+            "createdDate": "2026-04-01T10:00:00Z",
+            "createdBy": {"surname": "Test", "firstname": "User"},
+            "duration": 60,
+            "participantsCount": 0,
+            "participants": [],
+        }
+
+        result = format_recording(data)
+        assert "# Solo" in result

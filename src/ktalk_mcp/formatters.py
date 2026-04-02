@@ -91,6 +91,35 @@ def _format_datetime(dt_string: str | None) -> str:
         return dt_string
 
 
+def format_recording(data: dict) -> str:
+    """Format single recording details to markdown."""
+    title = data.get("title", "Без названия")
+    lines = [f"# {title}", ""]
+
+    lines.append(f"- **Ключ:** {data.get('key', 'N/A')}")
+    lines.append(f"- **Дата:** {_format_datetime(data.get('createdDate'))}")
+
+    created_by = data.get("createdBy")
+    if created_by:
+        lines.append(f"- **Автор:** {_format_user_name_from_user(created_by)}")
+
+    room = data.get("roomName")
+    if room:
+        lines.append(f"- **Комната:** {room}")
+
+    lines.append(f"- **Длительность:** {_format_duration(data.get('duration', 0))}")
+
+    participants = data.get("participants", [])
+    count = data.get("participantsCount", len(participants))
+    if participants:
+        names = [_format_user_name(p) for p in participants]
+        lines.append(f"- **Участники ({count}):** {', '.join(names)}")
+    elif count:
+        lines.append(f"- **Участники:** {count}")
+
+    return "\n".join(lines)
+
+
 def format_recordings_list(data: dict) -> str:
     """Format recordings list response to markdown table."""
     entities = data.get("entities", [])
