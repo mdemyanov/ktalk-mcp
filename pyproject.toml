@@ -5,11 +5,29 @@ description = "MCP server for accessing Kontur Talk (KTalk) recordings, transcri
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.12"
+authors = [
+    { name = "Maksim Demyanov", email = "mdemyanov@users.noreply.github.com" },
+]
+keywords = ["mcp", "ktalk", "kontur", "recordings", "transcripts"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Communications :: Conferencing",
+]
 dependencies = [
     "fastmcp>=2.0.0",
     "httpx>=0.28.0",
     "pydantic-settings>=2.0.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/mdemyanov/ktalk-mcp"
+Repository = "https://github.com/mdemyanov/ktalk-mcp"
+Issues = "https://github.com/mdemyanov/ktalk-mcp/issues"
 
 [project.scripts]
 ktalk-mcp = "ktalk_mcp.server:main"
