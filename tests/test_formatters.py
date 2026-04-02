@@ -325,3 +325,106 @@ class TestFormatTranscript:
         result = format_transcript(data)
         assert "Первая фраза." in result
         assert "Вторая фраза." in result
+
+
+class TestFormatSummary:
+    def test_composite_summary(self):
+        from ktalk_mcp.formatters import format_summary
+
+        data = {
+            "shortSummaryV2": {
+                "status": "success",
+                "chunks": [
+                    {"type": "text", "text": "Обсудили планы на спринт.", "timestamp": 0},
+                    {"type": "text", "text": "Распределили задачи.", "timestamp": 60000},
+                ],
+            },
+            "protocolV2": {
+                "status": "success",
+                "chunks": [
+                    {"type": "heading", "text": "Решения", "timestamp": 0},
+                    {"type": "text", "text": "1. Запустить MVP до пятницы.", "timestamp": 30000},
+                ],
+            },
+            "transcriptionV2": {
+                "status": "success",
+                "tracks": [],
+            },
+        }
+
+        result = format_summary(data)
+        assert "## Краткое резюме" in result
+        assert "Обсудили планы на спринт." in result
+        assert "Распределили задачи." in result
+        assert "## Протокол" in result
+        assert "Решения" in result
+        assert "Запустить MVP до пятницы." in result
+
+    def test_summary_in_progress(self):
+        from ktalk_mcp.formatters import format_summary
+
+        data = {
+            "shortSummaryV2": {"status": "inProgress", "chunks": None},
+            "protocolV2": {"status": "inProgress", "chunks": None},
+            "transcriptionV2": {"status": "success", "tracks": []},
+        }
+
+        result = format_summary(data)
+        assert "В обработке" in result
+
+    def test_summary_partial(self):
+        from ktalk_mcp.formatters import format_summary
+
+        data = {
+            "shortSummaryV2": {
+                "status": "success",
+                "chunks": [{"type": "text", "text": "Краткое.", "timestamp": 0}],
+            },
+            "protocolV2": {"status": "failed", "chunks": None},
+            "transcriptionV2": {"status": "success", "tracks": []},
+        }
+
+        result = format_summary(data)
+        assert "Краткое." in result
+        assert "недоступен" in result.lower() or "ошибка" in result.lower()
+
+
+class TestFormatSummaryByType:
+    def test_short_summary(self):
+        from ktalk_mcp.formatters import format_summary_by_type
+
+        data = {
+            "status": "success",
+            "chunks": [
+                {"type": "text", "text": "Обсуждение задач спринта.", "timestamp": 0},
+                {"type": "text", "text": "Все согласны с планом.", "timestamp": 120000},
+            ],
+        }
+
+        result = format_summary_by_type(data, "shortSummary")
+        assert "Краткое резюме" in result
+        assert "Обсуждение задач спринта." in result
+        assert "Все согласны с планом." in result
+
+    def test_protocol(self):
+        from ktalk_mcp.formatters import format_summary_by_type
+
+        data = {
+            "status": "success",
+            "chunks": [
+                {"type": "heading", "text": "Решения", "timestamp": 0},
+                {"type": "text", "text": "Запустить MVP.", "timestamp": 30000},
+            ],
+        }
+
+        result = format_summary_by_type(data, "protocol")
+        assert "Протокол" in result
+        assert "Решения" in result
+        assert "Запустить MVP." in result
+
+    def test_summary_not_found(self):
+        from ktalk_mcp.formatters import format_summary_by_type
+
+        data = {"status": "notFound", "chunks": None}
+        result = format_summary_by_type(data, "shortSummary")
+        assert "не найден" in result.lower() or "недоступ" in result.lower()

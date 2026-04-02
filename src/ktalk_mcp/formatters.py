@@ -5,6 +5,20 @@ from __future__ import annotations
 import json
 from datetime import datetime
 
+_STATUS_MESSAGES = {
+    "inProgress": "В обработке... Попробуйте позже.",
+    "failed": "Ошибка обработки.",
+    "notFound": "Не найдено.",
+    "notAvailable": "Недоступно.",
+    "serviceError": "Ошибка сервиса.",
+    "recreateInProgress": "Пересоздаётся... Попробуйте позже.",
+}
+
+_SUMMARY_TYPE_TITLES = {
+    "shortSummary": "Краткое резюме",
+    "protocol": "Протокол",
+}
+
 
 def format_raw(data: dict) -> str:
     """Return raw JSON string."""
@@ -183,3 +197,63 @@ def format_transcript(data: dict) -> str:
         lines.append("")
 
     return "\n".join(lines).rstrip()
+
+
+def _format_summary_chunks(chunks: list[dict] | None) -> str:
+    """Render summary chunks to markdown text."""
+    if not chunks:
+        return ""
+
+    lines: list[str] = []
+    for chunk in chunks:
+        chunk_type = chunk.get("type", "text")
+        text = chunk.get("text", "")
+        if chunk_type == "heading":
+            lines.append(f"### {text}")
+        else:
+            lines.append(text)
+        lines.append("")
+
+    return "\n".join(lines).rstrip()
+
+
+def format_summary(data: dict) -> str:
+    """Format composite summary response (v2) to markdown."""
+    lines = ["# Саммари", ""]
+
+    short = data.get("shortSummaryV2", {})
+    protocol = data.get("protocolV2", {})
+
+    # Short summary section
+    lines.append("## Краткое резюме")
+    lines.append("")
+    short_status = short.get("status", "notFound")
+    if short_status == "success":
+        lines.append(_format_summary_chunks(short.get("chunks")))
+    else:
+        lines.append(_STATUS_MESSAGES.get(short_status, f"Статус: {short_status}"))
+    lines.append("")
+
+    # Protocol section
+    lines.append("## Протокол")
+    lines.append("")
+    protocol_status = protocol.get("status", "notFound")
+    if protocol_status == "success":
+        lines.append(_format_summary_chunks(protocol.get("chunks")))
+    else:
+        lines.append(_STATUS_MESSAGES.get(protocol_status, f"Статус: {protocol_status}"))
+
+    return "\n".join(lines).rstrip()
+
+
+def format_summary_by_type(data: dict, summary_type: str) -> str:
+    """Format single summary type response to markdown."""
+    title = _SUMMARY_TYPE_TITLES.get(summary_type, summary_type)
+    status = data.get("status", "notFound")
+
+    if status != "success":
+        msg = _STATUS_MESSAGES.get(status, f"Статус: {status}")
+        return f"# {title}\n\n{msg}"
+
+    chunks_text = _format_summary_chunks(data.get("chunks"))
+    return f"# {title}\n\n{chunks_text}"
