@@ -1,7 +1,5 @@
 import json
 
-import pytest
-
 
 class TestHelpers:
     def test_format_duration_minutes_only(self):
