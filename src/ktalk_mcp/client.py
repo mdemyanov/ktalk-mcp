@@ -25,9 +25,10 @@ class KTalkClient:
     """
 
     def __init__(self, base_url: str, session_token: str) -> None:
+        self._session_token = session_token
         self._client = httpx.AsyncClient(
             base_url=base_url,
-            headers={"Authorization": f"Session {session_token}"},
+            params={"sessionToken": session_token},
             timeout=30.0,
         )
 
@@ -38,7 +39,7 @@ class KTalkClient:
         await self._client.aclose()
 
     def _check_response(self, response: httpx.Response, context: str = "") -> None:
-        if response.status_code == 401:
+        if response.status_code in (401, 403):
             raise KTalkAuthError(
                 "Токен сессии истёк или невалиден. "
                 "Обновите KTALK_SESSION_TOKEN (см. README)."
@@ -70,14 +71,13 @@ class KTalkClient:
         if title is not None:
             params["title"] = title
 
-        response = await self._client.get("/api/Domain/recordings/v2", params=params)
+        response = await self._client.get("/api/recordings", params=params)
         self._check_response(response, "список записей")
         return response.json()
 
-    async def get_recording(self, recording_key: str, *, max_participants: int = 6) -> dict:
+    async def get_recording(self, recording_key: str) -> dict:
         response = await self._client.get(
-            f"/api/Domain/recordings/{recording_key}",
-            params={"maxParticipantCount": max_participants},
+            f"/api/recordings/{recording_key}",
         )
         self._check_response(response, f"запись {recording_key}")
         return response.json()

@@ -110,7 +110,7 @@ def format_recording(data: dict) -> str:
     title = data.get("title", "Без названия")
     lines = [f"# {title}", ""]
 
-    lines.append(f"- **Ключ:** {data.get('key', 'N/A')}")
+    lines.append(f"- **Ключ:** {data.get('id', data.get('key', 'N/A'))}")
     lines.append(f"- **Дата:** {_format_datetime(data.get('createdDate'))}")
 
     created_by = data.get("createdBy")
@@ -136,7 +136,7 @@ def format_recording(data: dict) -> str:
 
 def format_recordings_list(data: dict) -> str:
     """Format recordings list response to markdown table."""
-    entities = data.get("entities", [])
+    entities = data.get("recordings") or data.get("entities") or []
 
     if not entities:
         return "# Записи KTalk\n\nЗаписей не найдено."
