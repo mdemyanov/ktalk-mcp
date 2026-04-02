@@ -107,11 +107,19 @@ class TestFormatRecordingsList:
                     "participantsCount": 2,
                     "participants": [
                         {
-                            "userInfo": {"surname": "Иванов", "firstname": "Иван"},
+                            "userInfo": {
+                                "surname": "Иванов",
+                                "firstname": "Иван",
+                                "key": "201",
+                            },
                             "isAnonymous": False,
                         },
                         {
-                            "userInfo": {"surname": "Петрова", "firstname": "Мария"},
+                            "userInfo": {
+                                "surname": "Петрова",
+                                "firstname": "Мария",
+                                "key": "202",
+                            },
                             "isAnonymous": False,
                         },
                     ],
@@ -131,7 +139,11 @@ class TestFormatRecordingsList:
                     "participantsCount": 1,
                     "participants": [
                         {
-                            "userInfo": {"surname": "Петрова", "firstname": "Мария"},
+                            "userInfo": {
+                                "surname": "Петрова",
+                                "firstname": "Мария",
+                                "key": "202",
+                            },
                             "isAnonymous": False,
                         },
                     ],
@@ -148,7 +160,7 @@ class TestFormatRecordingsList:
         assert "Ретро спринта" in result
         assert "Иванов Иван (101)" in result
         assert "Петрова Мария (102)" in result
-        assert "Иванов Иван, Петрова Мария" in result
+        assert "Иванов Иван (201), Петрова Мария (202)" in result
         assert "45 мин" in result
         assert "1 ч 20 мин" in result
         assert "abc123" in result

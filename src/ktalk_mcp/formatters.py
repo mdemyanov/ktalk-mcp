@@ -44,7 +44,7 @@ def _format_timestamp(millis: int) -> str:
     return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
 
 
-def _format_user_name(user_ref: dict | None) -> str:
+def _format_user_name(user_ref: dict | None, *, with_id: bool = False) -> str:
     """Extract display name from TalkUserRef or TalkUserBaseInfoRef."""
     if not user_ref:
         return "Неизвестный"
@@ -56,7 +56,12 @@ def _format_user_name(user_ref: dict | None) -> str:
     if not user_info:
         return "Неизвестный"
 
-    return _format_user_name_from_user(user_info)
+    name = _format_user_name_from_user(user_info)
+    if with_id:
+        uid = user_info.get("key") or user_info.get("login")
+        if uid:
+            return f"{name} ({uid})"
+    return name
 
 
 def _format_user_name_from_user(user: dict | None) -> str:
@@ -126,7 +131,7 @@ def format_recording(data: dict) -> str:
     participants = data.get("participants", [])
     count = data.get("participantsCount", len(participants))
     if participants:
-        names = [_format_user_name(p) for p in participants]
+        names = [_format_user_name(p, with_id=True) for p in participants]
         lines.append(f"- **Участники ({count}):** {', '.join(names)}")
     elif count:
         lines.append(f"- **Участники:** {count}")
@@ -158,7 +163,7 @@ def format_recordings_list(data: dict) -> str:
         duration = _format_duration(rec.get("duration", 0))
         participants_list = rec.get("participants") or []
         if participants_list:
-            names = [_format_user_name(p) for p in participants_list]
+            names = [_format_user_name(p, with_id=True) for p in participants_list]
             participants = ", ".join(names)
         else:
             count = rec.get("participantsCount", 0)
