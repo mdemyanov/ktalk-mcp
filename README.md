@@ -13,14 +13,14 @@ MCP сервер для доступа к записям [Контур.Толк]
 Требуется Python 3.12+ и [uv](https://docs.astral.sh/uv/).
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/mdemyanov/ktalk-mcp.git
 cd ktalk-mcp
 uv sync
 ```
 
 ## Получение session token
 
-У KTalk нет отдельного API-ключа для пользователей. Для авторизации используется session token из cookies браузера.
+KTalk использует session token для авторизации API-запросов. Токен передаётся как query parameter.
 
 1. Откройте https://naumen.ktalk.ru в браузере
 2. Войдите в свой аккаунт
@@ -28,24 +28,6 @@ uv sync
 4. Перейдите во вкладку **Application** → **Cookies** → `https://naumen.ktalk.ru`
 5. Найдите cookie с именем `sessionToken`
 6. Скопируйте его значение
-
-## Конфигурация
-
-Установите переменную окружения или создайте файл `.env`:
-
-```bash
-# Обязательно
-export KTALK_SESSION_TOKEN="ваш_session_token"
-
-# Опционально (по умолчанию https://naumen.ktalk.ru)
-export KTALK_BASE_URL="https://naumen.ktalk.ru"
-```
-
-Или создайте файл `.env` в корне проекта:
-
-```env
-KTALK_SESSION_TOKEN=ваш_session_token
-```
 
 > **Важно:** session token имеет ограниченный срок жизни. Если MCP tool возвращает ошибку авторизации, получите новый токен по инструкции выше.
 
@@ -69,6 +51,17 @@ KTALK_SESSION_TOKEN=ваш_session_token
 
 Замените `/path/to/ktalk-mcp` на реальный путь к директории проекта.
 
+### Альтернативная конфигурация
+
+Вместо `.mcp.json` можно задать переменную окружения или создать файл `.env` в корне проекта:
+
+```bash
+export KTALK_SESSION_TOKEN="ваш_session_token"
+
+# Опционально (по умолчанию https://naumen.ktalk.ru)
+export KTALK_BASE_URL="https://naumen.ktalk.ru"
+```
+
 ## Доступные MCP Tools
 
 ### `ktalk_list_recordings`
@@ -87,29 +80,29 @@ KTALK_SESSION_TOKEN=ваш_session_token
 
 ### `ktalk_get_recording`
 
-Детали записи.
+Детали одной записи — автор, дата, длительность, список участников.
 
 | Параметр | Тип | Default | Описание |
 |----------|-----|---------|----------|
-| `recording_key` | str | — | Ключ записи |
+| `recording_key` | str | — | Ключ (ID) записи |
 | `format` | str | markdown | raw / markdown |
 
 ### `ktalk_get_transcript`
 
-Транскрипт записи (диалог с таймкодами).
+Транскрипт записи — распознанная речь по спикерам с таймкодами.
 
 | Параметр | Тип | Default | Описание |
 |----------|-----|---------|----------|
-| `recording_key` | str | — | Ключ записи |
+| `recording_key` | str | — | Ключ (ID) записи |
 | `format` | str | markdown | raw / markdown |
 
 ### `ktalk_get_summary`
 
-Полное саммари (краткое резюме + протокол).
+Полное саммари записи (краткое резюме + протокол).
 
 | Параметр | Тип | Default | Описание |
 |----------|-----|---------|----------|
-| `recording_key` | str | — | Ключ записи |
+| `recording_key` | str | — | Ключ (ID) записи |
 | `format` | str | markdown | raw / markdown |
 
 ### `ktalk_get_summary_by_type`
@@ -118,9 +111,23 @@ KTALK_SESSION_TOKEN=ваш_session_token
 
 | Параметр | Тип | Default | Описание |
 |----------|-----|---------|----------|
-| `recording_key` | str | — | Ключ записи |
-| `summary_type` | str | — | shortSummary / protocol |
+| `recording_key` | str | — | Ключ (ID) записи |
+| `summary_type` | str | — | `shortSummary` / `protocol` |
 | `format` | str | markdown | raw / markdown |
+
+## API
+
+Сервер работает с KTalk Web API. Авторизация — через `sessionToken` query parameter.
+
+| Эндпоинт | Описание |
+|----------|----------|
+| `GET /api/recordings` | Список записей |
+| `GET /api/recordings/{id}` | Детали записи |
+| `GET /api/recordings/{id}/transcript` | Транскрипт |
+| `GET /api/recordings/v2/{id}/summary` | Полное саммари (v2) |
+| `GET /api/recordings/{id}/summary/{type}` | Саммари по типу |
+
+> OpenAPI спецификация `talk.public.api-api-2.json` включена как справочник, но содержит расхождения с реальным API (пути, формат авторизации, структура ответов).
 
 ## Разработка
 
@@ -135,5 +142,9 @@ uv run ruff check .
 uv run ruff check . --fix
 
 # Локальный запуск сервера
-uv run ktalk-mcp
+KTALK_SESSION_TOKEN=... uv run ktalk-mcp
 ```
+
+## Лицензия
+
+MIT

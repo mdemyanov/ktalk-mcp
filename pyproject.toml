@@ -3,6 +3,7 @@ name = "ktalk-mcp"
 version = "0.1.0"
 description = "MCP server for accessing Kontur Talk (KTalk) recordings, transcripts and summaries"
 readme = "README.md"
+license = "MIT"
 requires-python = ">=3.12"
 dependencies = [
     "fastmcp>=2.0.0",

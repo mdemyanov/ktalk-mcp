@@ -20,9 +20,14 @@ Flat MCP server, 4 модуля:
 - `config.py` — Settings из env (KTALK_BASE_URL, KTALK_SESSION_TOKEN)
 
 ## API Reference
-- OpenAPI спецификация: `talk.public.api-api-2.json`
+- OpenAPI спецификация (справочник, есть расхождения): `talk.public.api-api-2.json`
 - Base URL: https://naumen.ktalk.ru
-- Auth: заголовок `Authorization: Session {token}`
+- Auth: query parameter `sessionToken={token}`
+- Список записей: `GET /api/recordings` (поле `recordings[]`, ID в `id`)
+- Детали записи: `GET /api/recordings/{id}`
+- Транскрипт: `GET /api/recordings/{id}/transcript`
+- Саммари (v2): `GET /api/recordings/v2/{id}/summary`
+- Саммари по типу: `GET /api/recordings/{id}/summary/{type}`
 
 ## Conventions
 - Async everywhere (httpx, fastmcp)
