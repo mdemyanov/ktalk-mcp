@@ -89,3 +89,33 @@ def _format_datetime(dt_string: str | None) -> str:
         return dt.strftime("%Y-%m-%d %H:%M")
     except (ValueError, TypeError):
         return dt_string
+
+
+def format_recordings_list(data: dict) -> str:
+    """Format recordings list response to markdown table."""
+    entities = data.get("entities", [])
+
+    if not entities:
+        return "# Записи KTalk\n\nЗаписей не найдено."
+
+    lines = [
+        "# Записи KTalk",
+        "",
+        "| Название | Дата | Автор | Длительность | Участники |",
+        "|----------|------|-------|-------------|-----------|",
+    ]
+
+    for rec in entities:
+        title = rec.get("title", "Без названия")
+        date = _format_datetime(rec.get("createdDate"))
+        author = _format_user_name_short(rec.get("createdBy"))
+        duration = _format_duration(rec.get("duration", 0))
+        participants = rec.get("participantsCount", 0)
+        lines.append(f"| {title} | {date} | {author} | {duration} | {participants} |")
+
+    next_token = data.get("nextPageToken")
+    if next_token:
+        lines.append("")
+        lines.append(f'> Следующая страница: используйте `page_token: "{next_token}"`')
+
+    return "\n".join(lines)

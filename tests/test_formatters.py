@@ -87,3 +87,79 @@ class TestHelpers:
         parsed = json.loads(result)
         assert parsed == data
         assert "число" in result  # ensure_ascii=False
+
+
+class TestFormatRecordingsList:
+    def test_basic_list(self):
+        from ktalk_mcp.formatters import format_recordings_list
+
+        data = {
+            "entities": [
+                {
+                    "key": "rec-001",
+                    "title": "Стендап команды",
+                    "createdDate": "2026-04-01T10:00:00Z",
+                    "createdBy": {
+                        "surname": "Иванов",
+                        "firstname": "Иван",
+                        "login": "iivanov",
+                    },
+                    "duration": 2700,
+                    "participantsCount": 5,
+                    "roomName": "standup",
+                },
+                {
+                    "key": "rec-002",
+                    "title": "Ретро спринта",
+                    "createdDate": "2026-03-28T14:00:00Z",
+                    "createdBy": {
+                        "surname": "Петрова",
+                        "firstname": "Мария",
+                        "login": "mpetrova",
+                    },
+                    "duration": 4800,
+                    "participantsCount": 8,
+                    "roomName": "retro",
+                },
+            ],
+            "nextPageToken": "abc123",
+            "prevPageToken": None,
+        }
+
+        result = format_recordings_list(data)
+        assert "# Записи KTalk" in result
+        assert "Стендап команды" in result
+        assert "Ретро спринта" in result
+        assert "Иванов И." in result
+        assert "Петрова М." in result
+        assert "45 мин" in result
+        assert "1 ч 20 мин" in result
+        assert "abc123" in result
+
+    def test_empty_list(self):
+        from ktalk_mcp.formatters import format_recordings_list
+
+        data = {"entities": [], "nextPageToken": None, "prevPageToken": None}
+        result = format_recordings_list(data)
+        assert "Записей не найдено" in result
+
+    def test_no_next_page(self):
+        from ktalk_mcp.formatters import format_recordings_list
+
+        data = {
+            "entities": [
+                {
+                    "key": "rec-001",
+                    "title": "Test",
+                    "createdDate": "2026-04-01T10:00:00Z",
+                    "createdBy": {"surname": "Test", "firstname": "User"},
+                    "duration": 600,
+                    "participantsCount": 2,
+                    "roomName": "test",
+                },
+            ],
+            "nextPageToken": None,
+            "prevPageToken": None,
+        }
+        result = format_recordings_list(data)
+        assert "page_token" not in result
