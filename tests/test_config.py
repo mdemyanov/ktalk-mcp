@@ -20,7 +20,7 @@ def test_settings_default_base_url(monkeypatch):
     from ktalk_mcp.config import Settings
 
     settings = Settings()
-    assert settings.ktalk_base_url == "https://naumen.ktalk.ru"
+    assert settings.ktalk_base_url == "https://your-domain.ktalk.ru"
 
 
 def test_settings_requires_session_token(monkeypatch):

@@ -21,7 +21,7 @@ Flat MCP server, 4 модуля:
 
 ## API Reference
 - OpenAPI спецификация (справочник, есть расхождения): `talk.public.api-api-2.json`
-- Base URL: https://naumen.ktalk.ru
+- Base URL: https://your-domain.ktalk.ru
 - Auth: query parameter `sessionToken={token}`
 - Список записей: `GET /api/recordings` (поле `recordings[]`, ID в `id`)
 - Детали записи: `GET /api/recordings/{id}`

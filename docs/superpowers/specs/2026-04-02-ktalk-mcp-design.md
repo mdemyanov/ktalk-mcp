@@ -6,13 +6,13 @@
 
 ## Context
 
-Контур.Толк (KTalk) — корпоративная видеоконференц-платформа Naumen. Записи встреч, транскрипты и саммари доступны через Web UI, но нет удобного программного доступа для использования в AI-ассистентах.
+Контур.Толк (KTalk) — корпоративная видеоконференц-платформа. Записи встреч, транскрипты и саммари доступны через Web UI, но нет удобного программного доступа для использования в AI-ассистентах.
 
 **Цель**: создать локальный MCP сервер, который предоставляет Claude Code доступ к записям KTalk — списку записей, деталям, транскриптам и саммари/протоколам. Два режима вывода: raw JSON и человеко-читаемый markdown.
 
 **Аудитория**: команда, несколько человек. Нужна документация по установке и настройке.
 
-**Base URL**: `https://naumen.ktalk.ru`
+**Base URL**: `https://your-domain.ktalk.ru`
 
 ## Architecture
 
@@ -69,14 +69,14 @@ uvx ktalk-mcp
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
-    ktalk_base_url: str = "https://naumen.ktalk.ru"
+    ktalk_base_url: str = "https://your-domain.ktalk.ru"
     ktalk_session_token: str  # обязательный
 
     model_config = SettingsConfigDict(env_file=".env")
 ```
 
 - `KTALK_SESSION_TOKEN` — обязательная переменная окружения
-- `KTALK_BASE_URL` — по умолчанию `https://naumen.ktalk.ru`, можно переопределить
+- `KTALK_BASE_URL` — по умолчанию `https://your-domain.ktalk.ru`, можно переопределить
 - Поддержка `.env` файла для удобства
 - При отсутствии токена — понятная ошибка с инструкцией
 
@@ -236,9 +236,9 @@ Composite summary — объединяет секции:
 
 ### Получение токена (инструкция для пользователя)
 
-1. Открыть https://naumen.ktalk.ru в браузере
+1. Открыть https://your-domain.ktalk.ru в браузере
 2. Войти в свой аккаунт
-3. Открыть DevTools (F12) → Application → Cookies → `https://naumen.ktalk.ru`
+3. Открыть DevTools (F12) → Application → Cookies → `https://your-domain.ktalk.ru`
 4. Найти cookie `sessionToken`, скопировать значение
 5. Сохранить в `.env` файл или переменную окружения:
 
