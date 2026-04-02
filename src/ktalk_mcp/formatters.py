@@ -151,9 +151,18 @@ def format_recordings_list(data: dict) -> str:
     for rec in entities:
         title = rec.get("title", "Без названия")
         date = _format_datetime(rec.get("createdDate"))
-        author = _format_user_name_short(rec.get("createdBy"))
+        created_by = rec.get("createdBy") or {}
+        author_name = _format_user_name_from_user(created_by)
+        author_id = created_by.get("key") or created_by.get("login") or ""
+        author = f"{author_name} ({author_id})" if author_id else author_name
         duration = _format_duration(rec.get("duration", 0))
-        participants = rec.get("participantsCount", 0)
+        participants_list = rec.get("participants") or []
+        if participants_list:
+            names = [_format_user_name(p) for p in participants_list]
+            participants = ", ".join(names)
+        else:
+            count = rec.get("participantsCount", 0)
+            participants = str(count) if count else "—"
         lines.append(f"| {title} | {date} | {author} | {duration} | {participants} |")
 
     next_token = data.get("nextPageToken")

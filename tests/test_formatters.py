@@ -92,31 +92,49 @@ class TestFormatRecordingsList:
         from ktalk_mcp.formatters import format_recordings_list
 
         data = {
-            "entities": [
+            "recordings": [
                 {
-                    "key": "rec-001",
+                    "id": "rec-001",
                     "title": "Стендап команды",
                     "createdDate": "2026-04-01T10:00:00Z",
                     "createdBy": {
                         "surname": "Иванов",
                         "firstname": "Иван",
                         "login": "iivanov",
+                        "key": "101",
                     },
                     "duration": 2700,
-                    "participantsCount": 5,
+                    "participantsCount": 2,
+                    "participants": [
+                        {
+                            "userInfo": {"surname": "Иванов", "firstname": "Иван"},
+                            "isAnonymous": False,
+                        },
+                        {
+                            "userInfo": {"surname": "Петрова", "firstname": "Мария"},
+                            "isAnonymous": False,
+                        },
+                    ],
                     "roomName": "standup",
                 },
                 {
-                    "key": "rec-002",
+                    "id": "rec-002",
                     "title": "Ретро спринта",
                     "createdDate": "2026-03-28T14:00:00Z",
                     "createdBy": {
                         "surname": "Петрова",
                         "firstname": "Мария",
                         "login": "mpetrova",
+                        "key": "102",
                     },
                     "duration": 4800,
-                    "participantsCount": 8,
+                    "participantsCount": 1,
+                    "participants": [
+                        {
+                            "userInfo": {"surname": "Петрова", "firstname": "Мария"},
+                            "isAnonymous": False,
+                        },
+                    ],
                     "roomName": "retro",
                 },
             ],
@@ -128,8 +146,9 @@ class TestFormatRecordingsList:
         assert "# Записи KTalk" in result
         assert "Стендап команды" in result
         assert "Ретро спринта" in result
-        assert "Иванов И." in result
-        assert "Петрова М." in result
+        assert "Иванов Иван (101)" in result
+        assert "Петрова Мария (102)" in result
+        assert "Иванов Иван, Петрова Мария" in result
         assert "45 мин" in result
         assert "1 ч 20 мин" in result
         assert "abc123" in result
