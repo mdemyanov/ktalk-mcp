@@ -148,3 +148,38 @@ def format_recordings_list(data: dict) -> str:
         lines.append(f'> Следующая страница: используйте `page_token: "{next_token}"`')
 
     return "\n".join(lines)
+
+
+def format_transcript(data: dict) -> str:
+    """Format transcript response to markdown dialogue."""
+    status = data.get("status", "")
+
+    if status == "inProgress":
+        return "# Транскрипт\n\nВ обработке... Попробуйте позже."
+
+    if status in ("error", "failed"):
+        msg = data.get("statusMessage", "неизвестная ошибка")
+        return f"# Транскрипт\n\nОшибка транскрипции: {msg}"
+
+    tracks = data.get("tracks") or []
+    if not tracks:
+        return "# Транскрипт\n\nТранскрипт пуст."
+
+    # Collect all chunks with speaker info, sorted by time
+    entries: list[tuple[int, str, str]] = []
+    for track in tracks:
+        speaker_name = _format_user_name(track.get("speaker"))
+        for chunk in track.get("chunks") or []:
+            time_ms = chunk.get("startTimeOffsetInMillis", 0)
+            text = chunk.get("text", "")
+            entries.append((time_ms, speaker_name, text))
+
+    entries.sort(key=lambda e: e[0])
+
+    lines = ["# Транскрипт", ""]
+    for time_ms, speaker, text in entries:
+        timestamp = _format_timestamp(time_ms)
+        lines.append(f"**{speaker}** [{timestamp}]: {text}")
+        lines.append("")
+
+    return "\n".join(lines).rstrip()

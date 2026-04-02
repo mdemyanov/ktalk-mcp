@@ -223,3 +223,105 @@ class TestFormatRecording:
 
         result = format_recording(data)
         assert "# Solo" in result
+
+
+class TestFormatTranscript:
+    def test_complete_transcript(self):
+        from ktalk_mcp.formatters import format_transcript
+
+        data = {
+            "status": "complete",
+            "tracks": [
+                {
+                    "trackId": "track-1",
+                    "speaker": {
+                        "userInfo": {
+                            "surname": "Иванов",
+                            "firstname": "Иван",
+                            "login": "iivanov",
+                        },
+                        "isAnonymous": False,
+                    },
+                    "chunks": [
+                        {
+                            "chunkId": "c1",
+                            "startTimeOffsetInMillis": 15000,
+                            "endTimeOffsetInMillis": 30000,
+                            "text": "Доброе утро, давайте начнём.",
+                        },
+                    ],
+                },
+                {
+                    "trackId": "track-2",
+                    "speaker": {
+                        "userInfo": {
+                            "surname": "Петрова",
+                            "firstname": "Мария",
+                            "login": "mpetrova",
+                        },
+                        "isAnonymous": False,
+                    },
+                    "chunks": [
+                        {
+                            "chunkId": "c2",
+                            "startTimeOffsetInMillis": 102000,
+                            "endTimeOffsetInMillis": 120000,
+                            "text": "У меня вчера было две задачи.",
+                        },
+                    ],
+                },
+            ],
+        }
+
+        result = format_transcript(data)
+        assert "# Транскрипт" in result
+        assert "**Иванов Иван** [00:00:15]" in result
+        assert "Доброе утро, давайте начнём." in result
+        assert "**Петрова Мария** [00:01:42]" in result
+        assert "У меня вчера было две задачи." in result
+
+    def test_transcript_in_progress(self):
+        from ktalk_mcp.formatters import format_transcript
+
+        data = {"status": "inProgress", "tracks": None}
+        result = format_transcript(data)
+        assert "В обработке" in result
+
+    def test_transcript_error(self):
+        from ktalk_mcp.formatters import format_transcript
+
+        data = {"status": "error", "statusMessage": "Failed to process", "tracks": None}
+        result = format_transcript(data)
+        assert "Ошибка" in result
+
+    def test_transcript_multiple_chunks_per_track(self):
+        from ktalk_mcp.formatters import format_transcript
+
+        data = {
+            "status": "complete",
+            "tracks": [
+                {
+                    "trackId": "track-1",
+                    "speaker": {
+                        "userInfo": {"surname": "Иванов", "firstname": "Иван"},
+                        "isAnonymous": False,
+                    },
+                    "chunks": [
+                        {
+                            "chunkId": "c1",
+                            "startTimeOffsetInMillis": 1000,
+                            "text": "Первая фраза.",
+                        },
+                        {
+                            "chunkId": "c2",
+                            "startTimeOffsetInMillis": 5000,
+                            "text": "Вторая фраза.",
+                        },
+                    ],
+                },
+            ],
+        }
+
+        result = format_transcript(data)
+        assert "Первая фраза." in result
+        assert "Вторая фраза." in result
