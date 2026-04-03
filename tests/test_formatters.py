@@ -459,3 +459,60 @@ class TestFormatSummaryByType:
         data = {"status": "notFound", "chunks": None}
         result = format_summary_by_type(data, "shortSummary")
         assert "не найден" in result.lower() or "недоступ" in result.lower()
+
+
+class TestChunkTranscriptMarkdown:
+    def test_small_text_single_chunk(self):
+        from ktalk_mcp.formatters import chunk_transcript_markdown
+
+        text = "# Транскрипт\n\n**Иванов Иван** [00:00:15]: Короткая фраза."
+        result = chunk_transcript_markdown(text, chunk_size=5000)
+        assert result == [text]
+
+    def test_splits_at_utterance_boundary(self):
+        from ktalk_mcp.formatters import chunk_transcript_markdown
+
+        # Build transcript with 3 utterances, ~50 chars each
+        utterances = [
+            "**Иванов Иван** [00:00:15]: Первая реплика тестовая.",
+            "**Петрова Мария** [00:01:00]: Вторая реплика тестовая.",
+            "**Иванов Иван** [00:02:00]: Третья реплика тестовая.",
+        ]
+        text = "# Транскрипт\n\n" + "\n\n".join(utterances)
+
+        # chunk_size enough for header + 2 utterances but not 3
+        header_len = len("# Транскрипт\n\n")
+        two_utterances_len = len(utterances[0]) + 2 + len(utterances[1])
+        chunk_size = header_len + two_utterances_len + 10  # small margin
+
+        result = chunk_transcript_markdown(text, chunk_size=chunk_size)
+        assert len(result) == 2
+        assert result[0].startswith("# Транскрипт\n\n")
+        assert result[1].startswith("# Транскрипт\n\n")
+        assert "Первая реплика" in result[0]
+        assert "Вторая реплика" in result[0]
+        assert "Третья реплика" in result[1]
+
+    def test_single_long_utterance_not_split(self):
+        from ktalk_mcp.formatters import chunk_transcript_markdown
+
+        long_text = "A" * 10000
+        text = f"# Транскрипт\n\n**Иванов Иван** [00:00:00]: {long_text}"
+        result = chunk_transcript_markdown(text, chunk_size=100)
+        # Single utterance should never be split even if > chunk_size
+        assert len(result) == 1
+        assert long_text in result[0]
+
+    def test_empty_transcript(self):
+        from ktalk_mcp.formatters import chunk_transcript_markdown
+
+        text = "# Транскрипт\n\nТранскрипт пуст."
+        result = chunk_transcript_markdown(text, chunk_size=5000)
+        assert result == [text]
+
+    def test_error_status_not_split(self):
+        from ktalk_mcp.formatters import chunk_transcript_markdown
+
+        text = "# Транскрипт\n\nОшибка транскрипции: failed"
+        result = chunk_transcript_markdown(text, chunk_size=5000)
+        assert result == [text]
