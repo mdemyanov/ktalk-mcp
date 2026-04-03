@@ -1,5 +1,8 @@
 # ktalk-mcp
 
+[![PyPI](https://img.shields.io/pypi/v/ktalk-mcp)](https://pypi.org/project/ktalk-mcp/)
+[![Python](https://img.shields.io/pypi/pyversions/ktalk-mcp)](https://pypi.org/project/ktalk-mcp/)
+
 MCP сервер для доступа к записям [Контур.Толк](https://ktalk.ru) (KTalk) из Claude Code.
 
 Предоставляет доступ к:
@@ -63,6 +66,13 @@ export KTALK_SESSION_TOKEN="ваш_session_token"
 export KTALK_BASE_URL="https://your-domain.ktalk.ru"
 ```
 
+Также поддерживается файл `.env` в рабочей директории:
+
+```env
+KTALK_SESSION_TOKEN=ваш_session_token
+KTALK_BASE_URL=https://your-domain.ktalk.ru
+```
+
 ## Доступные MCP Tools
 
 ### `ktalk_list_recordings`
@@ -75,7 +85,7 @@ export KTALK_BASE_URL="https://your-domain.ktalk.ru"
 | `start_from` | str | — | Начало периода (ISO 8601) |
 | `start_to` | str | — | Конец периода |
 | `top` | int | 30 | Количество записей (1–1000) |
-| `order` | str | byTimeNewFirst | Сортировка |
+| `order` | str | byTimeNewFirst | Сортировка: `byTimeNewFirst`, `byTimeOldFirst`, `byTitle`, `bySizeBigFirst`, `bySizeSmallFirst` |
 | `page_token` | str | — | Токен пагинации |
 | `format` | str | markdown | raw / markdown |
 
