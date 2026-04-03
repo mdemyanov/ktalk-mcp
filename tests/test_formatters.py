@@ -516,3 +516,69 @@ class TestChunkTranscriptMarkdown:
         text = "# Транскрипт\n\nОшибка транскрипции: failed"
         result = chunk_transcript_markdown(text, chunk_size=5000)
         assert result == [text]
+
+
+class TestChunkTranscriptRaw:
+    def _make_transcript_data(self, num_chunks_per_track=1, num_tracks=2):
+        """Helper to build transcript API data with given number of entries."""
+        tracks = []
+        time_offset = 0
+        for t in range(num_tracks):
+            chunks = []
+            for c in range(num_chunks_per_track):
+                chunks.append({
+                    "chunkId": f"c-{t}-{c}",
+                    "startTimeOffsetInMillis": time_offset,
+                    "endTimeOffsetInMillis": time_offset + 15000,
+                    "text": f"Реплика {t}-{c} " + "x" * 50,
+                })
+                time_offset += 15000
+            tracks.append({
+                "trackId": f"track-{t}",
+                "speaker": {
+                    "userInfo": {"surname": f"Speaker{t}", "firstname": f"Name{t}"},
+                    "isAnonymous": False,
+                },
+                "chunks": chunks,
+            })
+        return {"status": "complete", "tracks": tracks}
+
+    def test_small_data_single_chunk(self):
+        from ktalk_mcp.formatters import chunk_transcript_raw
+
+        data = self._make_transcript_data(num_chunks_per_track=1, num_tracks=2)
+        result = chunk_transcript_raw(data, chunk_size=50000)
+        assert len(result) == 1
+        parsed = json.loads(result[0])
+        assert isinstance(parsed, list)
+        assert len(parsed) == 2
+
+    def test_splits_into_multiple_chunks(self):
+        from ktalk_mcp.formatters import chunk_transcript_raw
+
+        data = self._make_transcript_data(num_chunks_per_track=5, num_tracks=2)
+        # 10 entries total, each ~100+ chars serialized, use small chunk_size
+        result = chunk_transcript_raw(data, chunk_size=500)
+        assert len(result) > 1
+        # All entries present across chunks
+        all_entries = []
+        for chunk_str in result:
+            all_entries.extend(json.loads(chunk_str))
+        assert len(all_entries) == 10
+
+    def test_entries_sorted_by_time(self):
+        from ktalk_mcp.formatters import chunk_transcript_raw
+
+        data = self._make_transcript_data(num_chunks_per_track=3, num_tracks=2)
+        result = chunk_transcript_raw(data, chunk_size=50000)
+        entries = json.loads(result[0])
+        timestamps = [e["timestamp_ms"] for e in entries]
+        assert timestamps == sorted(timestamps)
+
+    def test_empty_tracks(self):
+        from ktalk_mcp.formatters import chunk_transcript_raw
+
+        data = {"status": "complete", "tracks": []}
+        result = chunk_transcript_raw(data, chunk_size=5000)
+        assert len(result) == 1
+        assert json.loads(result[0]) == []
