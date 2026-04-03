@@ -32,6 +32,7 @@ Flat MCP server, 4 модуля:
 ## Conventions
 - Async everywhere (httpx, fastmcp)
 - Каждый MCP tool принимает параметр `format`: "raw" (JSON as-is) или "markdown" (human-readable)
+- `ktalk_get_transcript` поддерживает чанкинг: `chunk` (0=авто, 1+=номер чанка), `chunk_size` (символов, по умолчанию 30000)
 - Ошибки API → человекочитаемые сообщения на русском
 - Имена пользователей: `surname firstname`, fallback: `login` → `anonymousName` → "Неизвестный"
 - Длительность: секунды → "X ч Y мин" или "X мин"
