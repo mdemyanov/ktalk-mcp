@@ -156,6 +156,8 @@ class TestFormatRecordingsList:
 
         result = format_recordings_list(data)
         assert "# Записи KTalk" in result
+        assert "rec-001" in result
+        assert "rec-002" in result
         assert "Стендап команды" in result
         assert "Ретро спринта" in result
         assert "Иванов Иван (101)" in result

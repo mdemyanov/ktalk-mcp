@@ -149,11 +149,12 @@ def format_recordings_list(data: dict) -> str:
     lines = [
         "# Записи KTalk",
         "",
-        "| Название | Дата | Автор | Длительность | Участники |",
-        "|----------|------|-------|-------------|-----------|",
+        "| ID | Название | Дата | Автор | Длительность | Участники |",
+        "|----|----------|------|-------|-------------|-----------|",
     ]
 
     for rec in entities:
+        rec_id = rec.get("id", rec.get("key", "N/A"))
         title = rec.get("title", "Без названия")
         date = _format_datetime(rec.get("createdDate"))
         created_by = rec.get("createdBy") or {}
@@ -168,7 +169,7 @@ def format_recordings_list(data: dict) -> str:
         else:
             count = rec.get("participantsCount", 0)
             participants = str(count) if count else "—"
-        lines.append(f"| {title} | {date} | {author} | {duration} | {participants} |")
+        lines.append(f"| {rec_id} | {title} | {date} | {author} | {duration} | {participants} |")
 
     next_token = data.get("nextPageToken")
     if next_token:

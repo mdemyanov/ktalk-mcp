@@ -1,6 +1,6 @@
 [project]
 name = "ktalk-mcp"
-version = "0.2.0"
+version = "0.2.1"
 description = "MCP server for accessing Kontur Talk (KTalk) recordings, transcripts and summaries"
 readme = "README.md"
 license = "MIT"
