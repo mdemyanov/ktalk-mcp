@@ -214,6 +214,57 @@ def format_transcript(data: dict) -> str:
     return "\n".join(lines).rstrip()
 
 
+def chunk_transcript_markdown(text: str, chunk_size: int) -> list[str]:
+    """Split formatted markdown transcript into chunks at utterance boundaries.
+
+    Returns a list of chunk strings. Each chunk includes the header.
+    A single utterance longer than chunk_size is kept intact (never split mid-utterance).
+    """
+    # Find header boundary (everything before first utterance)
+    header = ""
+    body = text
+    # Header is "# Транскрипт\n\n" — find first utterance marker
+    first_utterance = text.find("\n\n**")
+    if first_utterance != -1:
+        header = text[: first_utterance + 2]  # include the \n\n
+        body = text[first_utterance + 2 :]    # utterances start here
+    else:
+        # No utterances (empty/error/in-progress) — return as-is
+        return [text]
+
+    # Split body into individual utterances by \n\n
+    utterances = body.split("\n\n")
+    # Filter empty strings from trailing newlines
+    utterances = [u for u in utterances if u.strip()]
+
+    if not utterances:
+        return [text]
+
+    chunks: list[str] = []
+    current_parts: list[str] = []
+    current_len = len(header)
+
+    for utterance in utterances:
+        utterance_len = len(utterance)
+        # +2 for the \n\n separator between utterances
+        added_len = utterance_len + (2 if current_parts else 0)
+
+        if current_parts and current_len + added_len > chunk_size:
+            # Finalize current chunk
+            chunks.append(header + "\n\n".join(current_parts))
+            current_parts = [utterance]
+            current_len = len(header) + utterance_len
+        else:
+            current_parts.append(utterance)
+            current_len += added_len
+
+    # Don't forget the last chunk
+    if current_parts:
+        chunks.append(header + "\n\n".join(current_parts))
+
+    return chunks
+
+
 def _format_summary_chunks(chunks: list[dict] | None) -> str:
     """Render summary chunks to markdown text."""
     if not chunks:
