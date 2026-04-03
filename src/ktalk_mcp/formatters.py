@@ -265,6 +265,51 @@ def chunk_transcript_markdown(text: str, chunk_size: int) -> list[str]:
     return chunks
 
 
+def chunk_transcript_raw(data: dict, chunk_size: int) -> list[str]:
+    """Split transcript API data into chunks of JSON-serialized entry arrays.
+
+    Extracts entries from tracks, sorts by time, groups into chunks
+    where each chunk's serialized JSON length <= chunk_size.
+    Returns a list of JSON strings (each is a JSON array of entry objects).
+    """
+    tracks = data.get("tracks") or []
+    entries: list[dict] = []
+    for track in tracks:
+        speaker_name = _format_user_name(track.get("speaker"))
+        for chunk in track.get("chunks") or []:
+            entries.append({
+                "speaker": speaker_name,
+                "timestamp_ms": chunk.get("startTimeOffsetInMillis", 0),
+                "text": chunk.get("text", ""),
+            })
+
+    entries.sort(key=lambda e: e["timestamp_ms"])
+
+    if not entries:
+        return [json.dumps([], ensure_ascii=False, indent=2)]
+
+    chunks: list[str] = []
+    current_entries: list[dict] = []
+    current_len = 2  # "[]" base length
+
+    for entry in entries:
+        entry_json = json.dumps(entry, ensure_ascii=False)
+        # +2 for ",\n" separator, +4 for indentation in pretty-print
+        entry_len = len(entry_json) + 6
+        if current_entries and current_len + entry_len > chunk_size:
+            chunks.append(json.dumps(current_entries, ensure_ascii=False, indent=2))
+            current_entries = [entry]
+            current_len = 2 + len(entry_json) + 4
+        else:
+            current_entries.append(entry)
+            current_len += entry_len
+
+    if current_entries:
+        chunks.append(json.dumps(current_entries, ensure_ascii=False, indent=2))
+
+    return chunks
+
+
 def _format_summary_chunks(chunks: list[dict] | None) -> str:
     """Render summary chunks to markdown text."""
     if not chunks:
