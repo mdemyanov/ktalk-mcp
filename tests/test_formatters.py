@@ -608,7 +608,7 @@ class TestTranscriptChunkingIntegration:
 
     def test_chunk0_small_returns_plain_string(self):
         """chunk=0 + small transcript -> plain string (backward compat)."""
-        from ktalk_mcp.formatters import format_transcript, chunk_transcript_markdown
+        from ktalk_mcp.formatters import chunk_transcript_markdown, format_transcript
 
         data = self._make_long_transcript_data(3)
         text = format_transcript(data)
@@ -618,7 +618,7 @@ class TestTranscriptChunkingIntegration:
 
     def test_chunk0_large_returns_first_chunk(self):
         """chunk=0 + large transcript -> auto-chunks, returns first."""
-        from ktalk_mcp.formatters import format_transcript, chunk_transcript_markdown
+        from ktalk_mcp.formatters import chunk_transcript_markdown, format_transcript
 
         data = self._make_long_transcript_data(50)
         text = format_transcript(data)
@@ -628,7 +628,7 @@ class TestTranscriptChunkingIntegration:
 
     def test_chunk_metadata_structure(self):
         """Verify metadata JSON structure."""
-        from ktalk_mcp.formatters import format_transcript, chunk_transcript_markdown
+        from ktalk_mcp.formatters import chunk_transcript_markdown, format_transcript
 
         data = self._make_long_transcript_data(50)
         text = format_transcript(data)

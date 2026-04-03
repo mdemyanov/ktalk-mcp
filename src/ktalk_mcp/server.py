@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+import json
+
 from fastmcp import FastMCP
 
 from ktalk_mcp.client import KTalkClient, KTalkError
 from ktalk_mcp.config import Settings
 from ktalk_mcp.formatters import (
+    chunk_transcript_markdown,
+    chunk_transcript_raw,
     format_raw,
     format_recording,
     format_recordings_list,
@@ -100,17 +104,58 @@ async def ktalk_get_recording(
 async def ktalk_get_transcript(
     recording_key: str,
     format: str = "markdown",
+    chunk: int = 0,
+    chunk_size: int = 30000,
 ) -> str:
     """Get transcript of a KTalk recording (speech-to-text by speakers).
 
     Args:
         recording_key: Recording key/identifier (required)
         format: Output format — "raw" (JSON) or "markdown" (dialogue with timecodes)
+        chunk: Chunk number. 0 = auto (returns full text if small, first chunk if large).
+            1+ = specific chunk number for paged reading.
+        chunk_size: Max characters per chunk (~7500 tokens at 30000). Soft limit —
+            chunks split at utterance boundaries, never mid-utterance.
     """
     try:
         client = _get_client()
         data = await client.get_transcript(recording_key)
-        return _format_output(data, format, format_transcript)
+
+        # Format the full transcript
+        if format == "raw":
+            full_text = format_raw(data)
+        else:
+            full_text = format_transcript(data)
+
+        total_characters = len(full_text)
+
+        # Determine if chunking is needed
+        if chunk == 0 and total_characters <= chunk_size:
+            # Small transcript — return as-is (backward compatible)
+            return full_text
+
+        # Split into chunks
+        if format == "raw":
+            chunks = chunk_transcript_raw(data, chunk_size)
+        else:
+            chunks = chunk_transcript_markdown(full_text, chunk_size)
+
+        total_chunks = len(chunks)
+
+        # For chunk=0 (auto), serve first chunk
+        chunk_index = 0 if chunk == 0 else chunk - 1
+
+        if chunk_index < 0 or chunk_index >= total_chunks:
+            return f"Чанк {chunk} не существует. Всего чанков: {total_chunks}"
+
+        return json.dumps({
+            "result": chunks[chunk_index],
+            "chunk": chunk_index + 1,
+            "total_chunks": total_chunks,
+            "has_more": chunk_index + 1 < total_chunks,
+            "total_characters": total_characters,
+        }, ensure_ascii=False, indent=2)
+
     except KTalkError as e:
         return str(e)
 
