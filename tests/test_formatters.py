@@ -582,3 +582,71 @@ class TestChunkTranscriptRaw:
         result = chunk_transcript_raw(data, chunk_size=5000)
         assert len(result) == 1
         assert json.loads(result[0]) == []
+
+
+class TestTranscriptChunkingIntegration:
+    """Test the complete chunking flow: format → chunk → metadata."""
+
+    def _make_long_transcript_data(self, num_entries: int) -> dict:
+        """Build transcript data that produces a large markdown output."""
+        tracks = [{
+            "trackId": "track-0",
+            "speaker": {
+                "userInfo": {"surname": "Тестов", "firstname": "Тест"},
+                "isAnonymous": False,
+            },
+            "chunks": [
+                {
+                    "chunkId": f"c{i}",
+                    "startTimeOffsetInMillis": i * 15000,
+                    "text": f"Реплика номер {i}. " + "Текст " * 20,
+                }
+                for i in range(num_entries)
+            ],
+        }]
+        return {"status": "complete", "tracks": tracks}
+
+    def test_chunk0_small_returns_plain_string(self):
+        """chunk=0 + small transcript -> plain string (backward compat)."""
+        from ktalk_mcp.formatters import format_transcript, chunk_transcript_markdown
+
+        data = self._make_long_transcript_data(3)
+        text = format_transcript(data)
+        chunks = chunk_transcript_markdown(text, chunk_size=50000)
+        assert len(chunks) == 1
+        assert chunks[0] == text
+
+    def test_chunk0_large_returns_first_chunk(self):
+        """chunk=0 + large transcript -> auto-chunks, returns first."""
+        from ktalk_mcp.formatters import format_transcript, chunk_transcript_markdown
+
+        data = self._make_long_transcript_data(50)
+        text = format_transcript(data)
+        assert len(text) > 1000
+        chunks = chunk_transcript_markdown(text, chunk_size=1000)
+        assert len(chunks) > 1
+
+    def test_chunk_metadata_structure(self):
+        """Verify metadata JSON structure."""
+        from ktalk_mcp.formatters import format_transcript, chunk_transcript_markdown
+
+        data = self._make_long_transcript_data(50)
+        text = format_transcript(data)
+        chunks = chunk_transcript_markdown(text, chunk_size=1000)
+        total = len(chunks)
+
+        # Simulate what the tool would return for chunk=2
+        metadata = {
+            "result": chunks[1],
+            "chunk": 2,
+            "total_chunks": total,
+            "has_more": 2 < total,
+            "total_characters": len(text),
+        }
+        result = json.dumps(metadata, ensure_ascii=False, indent=2)
+        parsed = json.loads(result)
+        assert parsed["chunk"] == 2
+        assert parsed["total_chunks"] == total
+        assert parsed["has_more"] is True
+        assert parsed["total_characters"] == len(text)
+        assert "# Транскрипт" in parsed["result"]
