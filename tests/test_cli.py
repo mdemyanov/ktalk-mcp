@@ -174,3 +174,54 @@ def test_migrate_dry_run_json(tmp_path, capsys):
 
     with Registry(db) as reg:
         assert reg.list_recordings() == []  # dry-run wrote nothing
+
+
+def test_sync_inserts_dedups_and_expires(tmp_path, capsys, monkeypatch, httpx_mock):
+    monkeypatch.setenv("KTALK_BASE_URL", "https://test.ktalk.ru")
+    monkeypatch.setenv("KTALK_SESSION_TOKEN", "tok")
+    monkeypatch.delenv("KTALK_REGISTRY_DB", raising=False)
+
+    db = tmp_path / "r.db"
+    # Pre-seed an old 'new' recording that must expire, plus one that will be re-synced.
+    from ktalk_mcp.registry import Registry
+
+    with Registry(db) as reg:
+        reg.upsert_recording(
+            {"recording_id": "old", "name": "Old", "date": "2026-01-01"},
+            now="2026-01-01",
+        )
+        reg.upsert_recording(
+            {"recording_id": "dup", "name": "Existing", "date": "2026-06-24"},
+            now="2026-06-24",
+        )
+        reg.set_status("dup", "done")
+
+    # API returns a brand-new recording plus the already-known 'dup'.
+    httpx_mock.add_response(
+        json={
+            "recordings": [
+                {"id": "fresh", "title": "Fresh", "createdDate": "2026-06-25T10:00:00Z",
+                 "duration": 1800,
+                 "participants": [{"userInfo": {"key": "668", "surname": "Демьянов",
+                                                "firstname": "Максим"}}]},
+                {"id": "dup", "title": "Existing renamed",
+                 "createdDate": "2026-06-24T10:00:00Z", "duration": 600},
+            ]
+        }
+    )
+
+    from ktalk_mcp.cli import main
+
+    rc = main(["--db", str(db), "sync", "--days", "7", "--json"])
+    assert rc == 0
+    out = json.loads(capsys.readouterr().out)
+    assert out["expired"] == ["old"]
+    assert out["inserted"] == 1
+    assert out["updated"] == 1
+
+    with Registry(db) as reg:
+        assert reg.get_recording("fresh")["status"] == "new"
+        assert reg.get_recording("dup")["status"] == "done"  # status preserved
+        assert reg.get_recording("dup")["name"] == "Existing renamed"  # content updated
+        assert reg.get_recording("old")["status"] == "skipped"
+        assert reg.get_meta("sync_count") == "1"
