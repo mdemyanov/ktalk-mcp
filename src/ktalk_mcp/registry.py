@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 from datetime import date, timedelta
 from pathlib import Path
@@ -90,6 +91,164 @@ def participants_from_api(rec: dict) -> list[dict]:
         seen.add(ktalk_id)
         out.append({"ktalk_id": str(ktalk_id), "name": _api_user_name(info)})
     return out
+
+
+_KTALK_RE = re.compile(r"\(ktalk:([^)]+)\)")
+
+
+def parse_participants_field(raw: str) -> list[dict]:
+    """Parse 'Имя Фамилия (ktalk:ID), ...' into participant dicts."""
+    out: list[dict] = []
+    for part in raw.split(","):
+        part = part.strip()
+        m = _KTALK_RE.search(part)
+        if not m:
+            continue
+        name = _KTALK_RE.sub("", part).strip()
+        out.append({"ktalk_id": m.group(1).strip(), "name": name})
+    return out
+
+
+def parse_duration_field(raw: str) -> int | None:
+    """Parse '61 мин' / '1 ч 5 мин' into minutes; '—'/'' -> None."""
+    raw = raw.strip()
+    if not raw or raw == "—":
+        return None
+    hours = re.search(r"(\d+)\s*ч", raw)
+    minutes = re.search(r"(\d+)\s*мин", raw)
+    total = 0
+    if hours:
+        total += int(hours.group(1)) * 60
+    if minutes:
+        total += int(minutes.group(1))
+    return total or None
+
+
+def _table_rows(text: str) -> list[list[str]]:
+    rows: list[list[str]] = []
+    for line in text.splitlines():
+        line = line.strip()
+        if not line.startswith("|"):
+            continue
+        cells = [c.strip() for c in line.strip("|").split("|")]
+        if not cells or cells[0] == "recording_id":
+            continue
+        if all(set(c) <= {"-", ":"} for c in cells):  # separator row
+            continue
+        rows.append(cells)
+    return rows
+
+
+def _nullable_path(value: str) -> str | None:
+    value = value.strip()
+    return None if value in ("", "—") else value
+
+
+def parse_unprocessed_table(text: str) -> list[dict]:
+    """Parse the 6-column 'Необработанные записи' table."""
+    out: list[dict] = []
+    for cells in _table_rows(text):
+        if len(cells) < 6:
+            continue
+        out.append(
+            {
+                "recording_id": cells[0],
+                "name": cells[1],
+                "participants": parse_participants_field(cells[2]),
+                "date": cells[3],
+                "duration_min": parse_duration_field(cells[4]),
+                "status": cells[5],
+            }
+        )
+    return out
+
+
+def parse_archive_table(text: str) -> list[dict]:
+    """Parse the 7-column archive table."""
+    out: list[dict] = []
+    for cells in _table_rows(text):
+        if len(cells) < 7:
+            continue
+        out.append(
+            {
+                "recording_id": cells[0],
+                "name": cells[1],
+                "date": cells[2],
+                "status": cells[3],
+                "processed_at": _nullable_path(cells[4]),
+                "transcript_path": _nullable_path(cells[5]),
+                "protocol_path": _nullable_path(cells[6]),
+            }
+        )
+    return out
+
+
+def migrate_from_vault(
+    registry: Registry,
+    vault_path: str | Path,
+    *,
+    dry_run: bool = False,
+    now: str | None = None,
+) -> dict:
+    """Import existing markdown registries into the SQLite store. Idempotent."""
+    now = now or today_str()
+    base = Path(vault_path) / "95_TRANSCRIPTS"
+    by_status: dict[str, int] = {}
+    recordings = 0
+    participants = 0
+
+    def _count(status: str) -> None:
+        by_status[status] = by_status.get(status, 0) + 1
+
+    reg_md = base / "registry.md"
+    if reg_md.exists():
+        for row in parse_unprocessed_table(reg_md.read_text(encoding="utf-8")):
+            recordings += 1
+            participants += len(row["participants"])
+            _count(row["status"])
+            if not dry_run:
+                registry.upsert_recording(
+                    {
+                        "recording_id": row["recording_id"],
+                        "name": row["name"],
+                        "date": row["date"],
+                        "duration_min": row["duration_min"],
+                        "status": row["status"],
+                    },
+                    participants=row["participants"],
+                    now=now,
+                )
+                if row["status"] != "new":
+                    registry.set_status(row["recording_id"], row["status"], now=now)
+
+    for archive in sorted(base.glob("registry-archive-*.md")):
+        for row in parse_archive_table(archive.read_text(encoding="utf-8")):
+            recordings += 1
+            _count(row["status"])
+            if not dry_run:
+                registry.upsert_recording(
+                    {
+                        "recording_id": row["recording_id"],
+                        "name": row["name"],
+                        "date": row["date"],
+                        "status": row["status"],
+                    },
+                    now=now,
+                )
+                registry.set_status(
+                    row["recording_id"],
+                    row["status"],
+                    now=now,
+                    transcript_path=row["transcript_path"],
+                    protocol_path=row["protocol_path"],
+                    processed_at=row["processed_at"],
+                )
+
+    return {
+        "recordings": recordings,
+        "participants": participants,
+        "by_status": by_status,
+    }
 
 
 class Registry:
