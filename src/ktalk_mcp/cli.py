@@ -5,9 +5,16 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from pathlib import Path
 
 from ktalk_mcp.config import resolve_db_path
-from ktalk_mcp.registry import Registry
+from ktalk_mcp.registry import (
+    Registry,
+    migrate_from_vault,
+    render_markdown_mirror,
+)
+
+_STATUSES = ("new", "processing", "done", "skipped", "partial")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -44,6 +51,19 @@ def build_parser() -> argparse.ArgumentParser:
     p_vi.add_argument("id")
     p_vi.add_argument("ktalk_id")
     p_vi.add_argument("vault_id")
+
+    p_dash = sub.add_parser("dashboard", help="Дашборд")
+    p_dash.add_argument("--json", action="store_true")
+
+    p_exp = sub.add_parser("export", help="Сгенерировать markdown-зеркало")
+    p_exp.add_argument("--out", default=None)
+    p_exp.add_argument("--full", action="store_true")
+    p_exp.add_argument("--json", action="store_true")
+
+    p_mig = sub.add_parser("migrate", help="Импорт из markdown-реестров")
+    p_mig.add_argument("vault_path")
+    p_mig.add_argument("--dry-run", action="store_true")
+    p_mig.add_argument("--json", action="store_true")
 
     return parser
 
@@ -125,6 +145,54 @@ def _cmd_set_vault_id(reg: Registry, args) -> int:
     return 0
 
 
+def _cmd_dashboard(reg: Registry, args) -> int:
+    recs = reg.list_recordings()
+    new = [r for r in recs if r["status"] == "new"]
+    stats = {s: sum(1 for r in recs if r["status"] == s) for s in _STATUSES}
+    if args.json:
+        _print_json({"new": new, "stats": stats})
+        return 0
+    print("# Дашборд KTalk\n")
+    print("## Новые записи")
+    if not new:
+        print("(нет)")
+    for i, r in enumerate(new, 1):
+        print(f"{i}. {r['recording_id']}  {r['date']}  {r['name']}")
+    print(
+        f"\nСтатистика: новых {stats['new']}, в обработке {stats['processing']}, "
+        f"обработано {stats['done']}, пропущено {stats['skipped']}, "
+        f"частично {stats['partial']}"
+    )
+    return 0
+
+
+def _cmd_export(reg: Registry, args) -> int:
+    text = render_markdown_mirror(reg, full=args.full)
+    if args.out:
+        out_path = Path(args.out)
+    else:
+        out_path = Path(resolve_db_path(args.db)).parent / "registry.md"
+    out_path.write_text(text, encoding="utf-8")
+    if args.json:
+        _print_json({"written": str(out_path)})
+    else:
+        print(f"Зеркало записано: {out_path}")
+    return 0
+
+
+def _cmd_migrate(reg: Registry, args) -> int:
+    summary = migrate_from_vault(reg, args.vault_path, dry_run=args.dry_run)
+    if args.json:
+        _print_json(summary)
+    else:
+        print(f"Импортировано записей: {summary['recordings']}")
+        print(f"Участников: {summary['participants']}")
+        print(f"По статусам: {summary['by_status']}")
+        if args.dry_run:
+            print("(dry-run: ничего не записано)")
+    return 0
+
+
 _HANDLERS = {
     "list": _cmd_list,
     "show": _cmd_show,
@@ -133,6 +201,9 @@ _HANDLERS = {
     "mark-partial": _cmd_mark_partial,
     "mark-skipped": _cmd_mark_skipped,
     "set-vault-id": _cmd_set_vault_id,
+    "dashboard": _cmd_dashboard,
+    "export": _cmd_export,
+    "migrate": _cmd_migrate,
 }
 
 
