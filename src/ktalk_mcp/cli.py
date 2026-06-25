@@ -23,6 +23,28 @@ def build_parser() -> argparse.ArgumentParser:
     p_show.add_argument("id")
     p_show.add_argument("--json", action="store_true")
 
+    p_mp = sub.add_parser("mark-processing", help="В обработку")
+    p_mp.add_argument("id")
+
+    p_md = sub.add_parser("mark-done", help="Завершить обработку")
+    p_md.add_argument("id")
+    p_md.add_argument("--transcript", required=True)
+    p_md.add_argument("--protocol", required=True)
+    p_md.add_argument("--type", dest="meeting_type", default=None)
+
+    p_pp = sub.add_parser("mark-partial", help="Частичная обработка")
+    p_pp.add_argument("id")
+    p_pp.add_argument("--transcript", default=None)
+    p_pp.add_argument("--protocol", default=None)
+
+    p_sk = sub.add_parser("mark-skipped", help="Пропустить")
+    p_sk.add_argument("id")
+
+    p_vi = sub.add_parser("set-vault-id", help="Привязать профиль к участнику")
+    p_vi.add_argument("id")
+    p_vi.add_argument("ktalk_id")
+    p_vi.add_argument("vault_id")
+
     return parser
 
 
@@ -68,9 +90,49 @@ def _cmd_show(reg: Registry, args) -> int:
     return 0
 
 
+def _cmd_mark_processing(reg: Registry, args) -> int:
+    reg.mark_processing(args.id)
+    print(f"{args.id}: processing")
+    return 0
+
+
+def _cmd_mark_done(reg: Registry, args) -> int:
+    reg.mark_done(
+        args.id,
+        transcript_path=args.transcript,
+        protocol_path=args.protocol,
+        meeting_type=args.meeting_type,
+    )
+    print(f"{args.id}: done")
+    return 0
+
+
+def _cmd_mark_partial(reg: Registry, args) -> int:
+    reg.mark_partial(args.id, transcript_path=args.transcript, protocol_path=args.protocol)
+    print(f"{args.id}: partial")
+    return 0
+
+
+def _cmd_mark_skipped(reg: Registry, args) -> int:
+    reg.mark_skipped(args.id)
+    print(f"{args.id}: skipped")
+    return 0
+
+
+def _cmd_set_vault_id(reg: Registry, args) -> int:
+    reg.set_vault_id(args.id, args.ktalk_id, args.vault_id)
+    print(f"{args.id}/{args.ktalk_id} -> {args.vault_id}")
+    return 0
+
+
 _HANDLERS = {
     "list": _cmd_list,
     "show": _cmd_show,
+    "mark-processing": _cmd_mark_processing,
+    "mark-done": _cmd_mark_done,
+    "mark-partial": _cmd_mark_partial,
+    "mark-skipped": _cmd_mark_skipped,
+    "set-vault-id": _cmd_set_vault_id,
 }
 
 
