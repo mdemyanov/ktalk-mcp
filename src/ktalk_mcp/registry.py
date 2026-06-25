@@ -163,21 +163,58 @@ def parse_unprocessed_table(text: str) -> list[dict]:
     return out
 
 
+_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+def _clean_archive_name(fragments: list[str]) -> str:
+    """Join name fragments split by a literal '|' in the cell, dropping escape slashes."""
+    parts = []
+    for frag in fragments:
+        frag = frag.strip().rstrip("\\").strip()
+        if frag:
+            parts.append(frag)
+    return " | ".join(parts)
+
+
 def parse_archive_table(text: str) -> list[dict]:
-    """Parse the 7-column archive table."""
+    """Parse archive tables, tolerant of column-count variation and stray pipes.
+
+    Anchors recording_id from the left and the four status/path columns from the
+    right; detects date and participants by content in the middle. This survives
+    the 7-column and 8-column ('Участники') layouts as well as rows with an
+    escaped/unescaped '|' inside the title or a duplicated id cell.
+    """
     out: list[dict] = []
     for cells in _table_rows(text):
         if len(cells) < 7:
             continue
+        rid = cells[0]
+        protocol = _nullable_path(cells[-1])
+        transcript = _nullable_path(cells[-2])
+        processed_at = _nullable_path(cells[-3])
+        status = cells[-4].strip()
+        middle = cells[1:-4]  # name [| name...], date, [participants]
+        date = ""
+        participants_raw = ""
+        name_fragments: list[str] = []
+        for cell in middle:
+            value = cell.strip()
+            if not date and _DATE_RE.match(value):
+                date = value
+            elif "ktalk:" in value:
+                participants_raw = value
+            else:
+                name_fragments.append(cell)
         out.append(
             {
-                "recording_id": cells[0],
-                "name": cells[1],
-                "date": cells[2],
-                "status": cells[3],
-                "processed_at": _nullable_path(cells[4]),
-                "transcript_path": _nullable_path(cells[5]),
-                "protocol_path": _nullable_path(cells[6]),
+                "recording_id": rid,
+                "name": _clean_archive_name(name_fragments),
+                "date": date,
+                "status": status,
+                "processed_at": processed_at,
+                "transcript_path": transcript,
+                "protocol_path": protocol,
+                "participants": parse_participants_field(participants_raw),
             }
         )
     return out
@@ -224,6 +261,7 @@ def migrate_from_vault(
     for archive in sorted(base.glob("registry-archive-*.md")):
         for row in parse_archive_table(archive.read_text(encoding="utf-8")):
             recordings += 1
+            participants += len(row["participants"])
             _count(row["status"])
             if not dry_run:
                 registry.upsert_recording(
@@ -233,6 +271,7 @@ def migrate_from_vault(
                         "date": row["date"],
                         "status": row["status"],
                     },
+                    participants=row["participants"] or None,
                     now=now,
                 )
                 registry.set_status(
