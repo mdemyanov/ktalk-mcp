@@ -56,43 +56,14 @@ def test_parse_archive_table():
     assert skipped["protocol_path"] is None
 
 
-ARCHIVE_8COL = """\
-# Архив
-
-| recording_id | Название | Дата | Участники | Статус | Дата обработки | Путь транскрипта | Путь протокола |
-|---|---|---|---|---|---|---|---|
-| R0Wng9L7wAY58El8n5rf | Регулярные встречи | 2026-05-08 | Шадрин Всеволод (ktalk:706), Демьянов Максим (ktalk:668) | done | 2026-05-27 | 95_TRANSCRIPTS/2026/a.md | 30_PROJECTS/x.md |
-"""
-
-ARCHIVE_PIPE_IN_NAME = """\
-# Архив
-
-| recording_id | Название | Дата | Участники | Статус | Дата обработки | Путь транскрипта | Путь протокола |
-|---|---|---|---|---|---|---|---|
-| v3kbOfHTJTnFTQOv8RjZ | Документация на примере экосистемы | Gramax | 2026-05-12 | Демьянов Максим (ktalk:668) | done | 2026-05-27 | 95_TRANSCRIPTS/2026/b.md | 30_PROJECTS/y.md |
-"""
-
-ARCHIVE_ESCAPED_PIPE_7COL = """\
-# Архив
-
-| recording_id | Название | Дата | Статус | Дата обработки | Путь транскрипта | Путь протокола |
-|---|---|---|---|---|---|---|
-| ZmTErEzMULgA9b6186nX | Обновление 4.21.5. ECS \\| ITSM. Вопросы | 2026-04-23 | done | 2026-05-27 | 95_TRANSCRIPTS/2026/c.md | 20_MEETINGS/z.md |
-"""
-
-ARCHIVE_DUP_ID = """\
-# Архив
-
-| recording_id | Название | Дата | Участники | Статус | Дата обработки | Путь транскрипта | Путь протокола |
-|---|---|---|---|---|---|---|---|
-| xHpXhc29P7VlSOjw9PX0 | xHpXhc29P7VlSOjw9PX0 | Катя и Максим | 2026-05-15 | Демьянов Максим (ktalk:668) | done | 2026-05-27 | 95_TRANSCRIPTS/2026/d.md | 30_PROJECTS/w.md |
-"""
+def _fixture(name: str) -> str:
+    return (FIXTURES / name).read_text(encoding="utf-8")
 
 
 def test_parse_archive_8col_with_participants():
     from ktalk_mcp.registry import parse_archive_table
 
-    rows = parse_archive_table(ARCHIVE_8COL)
+    rows = parse_archive_table(_fixture("archive-8col.md"))
     assert len(rows) == 1
     row = rows[0]
     assert row["recording_id"] == "R0Wng9L7wAY58El8n5rf"
@@ -108,7 +79,7 @@ def test_parse_archive_8col_with_participants():
 def test_parse_archive_unescaped_pipe_in_name():
     from ktalk_mcp.registry import parse_archive_table
 
-    row = parse_archive_table(ARCHIVE_PIPE_IN_NAME)[0]
+    row = parse_archive_table(_fixture("archive-pipe-in-name.md"))[0]
     assert row["recording_id"] == "v3kbOfHTJTnFTQOv8RjZ"
     assert row["name"] == "Документация на примере экосистемы | Gramax"
     assert row["date"] == "2026-05-12"
@@ -119,7 +90,7 @@ def test_parse_archive_unescaped_pipe_in_name():
 def test_parse_archive_escaped_pipe_7col():
     from ktalk_mcp.registry import parse_archive_table
 
-    row = parse_archive_table(ARCHIVE_ESCAPED_PIPE_7COL)[0]
+    row = parse_archive_table(_fixture("archive-escaped-pipe-7col.md"))[0]
     assert row["recording_id"] == "ZmTErEzMULgA9b6186nX"
     assert row["name"] == "Обновление 4.21.5. ECS | ITSM. Вопросы"
     assert row["date"] == "2026-04-23"
@@ -130,7 +101,7 @@ def test_parse_archive_escaped_pipe_7col():
 def test_parse_archive_duplicated_id():
     from ktalk_mcp.registry import parse_archive_table
 
-    row = parse_archive_table(ARCHIVE_DUP_ID)[0]
+    row = parse_archive_table(_fixture("archive-dup-id.md"))[0]
     assert row["recording_id"] == "xHpXhc29P7VlSOjw9PX0"
     assert row["date"] == "2026-05-15"
     assert row["status"] == "done"

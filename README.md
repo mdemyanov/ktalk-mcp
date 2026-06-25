@@ -144,6 +144,38 @@ KTALK_BASE_URL=https://your-domain.ktalk.ru
 
 > OpenAPI спецификация `talk.public.api-api-2.json` включена как справочник, но содержит расхождения с реальным API (пути, формат авторизации, структура ответов).
 
+## CLI реестра (`ktalk`)
+
+Тот же пакет ставит вторую команду — `ktalk`, операционный реестр записей на
+SQLite. Вся детерминированная механика (синхронизация списка записей, дедуп,
+экспирация, смена статусов, рендер дашборда и markdown-зеркала, разовая
+миграция) живёт в коде, а не в рассуждениях модели.
+
+**SQLite — операционный source of truth.** Markdown-файл `registry.md` —
+генерируемое read-only зеркало для git (`ktalk export`), руками не редактируется.
+
+Путь к базе: флаг `--db PATH` > переменная `KTALK_REGISTRY_DB` > дефолт
+`95_TRANSCRIPTS/.registry.db` (относительно текущего каталога). Бинарную БД
+нужно добавить в `.gitignore` (`.registry.db`, `.registry.db-wal`, `.registry.db-shm`).
+
+| Команда | Назначение |
+|---|---|
+| `ktalk sync [--days 7] [--json]` | Загрузить записи из KTalk, upsert новых (`new`), экспирировать `new` старше N дней → `skipped`, показать дашборд. Идемпотентно. |
+| `ktalk dashboard [--json]` | Дашборд: новые записи, статистика по статусам. |
+| `ktalk list [--status S] [--json]` | Список записей с фильтром по статусу. |
+| `ktalk show <id> [--json]` | Детали записи: участники, статус, пути, длительность. |
+| `ktalk mark-processing <id>` | Перевести в `processing`. |
+| `ktalk mark-done <id> --transcript P --protocol P [--type T]` | Завершить, проставить пути и `processed_at`. |
+| `ktalk mark-partial <id> [--transcript P] [--protocol P]` | Частичная обработка. |
+| `ktalk mark-skipped <id>` | Пропустить вручную. |
+| `ktalk set-vault-id <id> <ktalk_id> <vault_id>` | Привязать профиль к участнику. |
+| `ktalk export [--out PATH] [--full]` | Сгенерировать markdown-зеркало. |
+| `ktalk migrate <vault> [--dry-run] [--json]` | Разовый импорт из markdown-реестров. |
+
+Все команды поддерживают `--json` (валидный JSON в stdout; ошибки — в stderr с
+ненулевым кодом возврата). Несколько фоновых агентов могут безопасно писать
+параллельно (WAL + `busy_timeout` + транзакция на операцию).
+
 ## Разработка
 
 ```bash
