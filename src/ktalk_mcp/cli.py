@@ -1,0 +1,297 @@
+"""Command-line interface for the KTalk recordings registry."""
+
+from __future__ import annotations
+
+import argparse
+import asyncio
+import json
+import sys
+from datetime import date, timedelta
+from pathlib import Path
+
+from ktalk_mcp.client import KTalkClient, KTalkError
+from ktalk_mcp.config import Settings, resolve_db_path
+from ktalk_mcp.registry import (
+    Registry,
+    migrate_from_vault,
+    participants_from_api,
+    recording_fields_from_api,
+    render_markdown_mirror,
+)
+
+_STATUSES = ("new", "processing", "done", "skipped", "partial")
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(prog="ktalk", description="Реестр записей Kontur Talk")
+    parser.add_argument("--db", default=None, help="Путь к SQLite-базе реестра")
+    sub = parser.add_subparsers(dest="command")
+
+    p_list = sub.add_parser("list", help="Список записей")
+    p_list.add_argument("--status", default=None)
+    p_list.add_argument("--json", action="store_true")
+
+    p_show = sub.add_parser("show", help="Детали записи")
+    p_show.add_argument("id")
+    p_show.add_argument("--json", action="store_true")
+
+    p_mp = sub.add_parser("mark-processing", help="В обработку")
+    p_mp.add_argument("id")
+
+    p_md = sub.add_parser("mark-done", help="Завершить обработку")
+    p_md.add_argument("id")
+    p_md.add_argument("--transcript", required=True)
+    p_md.add_argument("--protocol", required=True)
+    p_md.add_argument("--type", dest="meeting_type", default=None)
+
+    p_pp = sub.add_parser("mark-partial", help="Частичная обработка")
+    p_pp.add_argument("id")
+    p_pp.add_argument("--transcript", default=None)
+    p_pp.add_argument("--protocol", default=None)
+
+    p_sk = sub.add_parser("mark-skipped", help="Пропустить")
+    p_sk.add_argument("id")
+
+    p_vi = sub.add_parser("set-vault-id", help="Привязать профиль к участнику")
+    p_vi.add_argument("id")
+    p_vi.add_argument("ktalk_id")
+    p_vi.add_argument("vault_id")
+
+    p_dash = sub.add_parser("dashboard", help="Дашборд")
+    p_dash.add_argument("--json", action="store_true")
+
+    p_exp = sub.add_parser("export", help="Сгенерировать markdown-зеркало")
+    p_exp.add_argument("--out", default=None)
+    p_exp.add_argument("--full", action="store_true")
+    p_exp.add_argument("--json", action="store_true")
+
+    p_mig = sub.add_parser("migrate", help="Импорт из markdown-реестров")
+    p_mig.add_argument("vault_path")
+    p_mig.add_argument("--dry-run", action="store_true")
+    p_mig.add_argument("--json", action="store_true")
+
+    p_sync = sub.add_parser("sync", help="Синхронизация с KTalk")
+    p_sync.add_argument("--days", type=int, default=7)
+    p_sync.add_argument("--json", action="store_true")
+
+    return parser
+
+
+def _print_json(data) -> None:
+    print(json.dumps(data, ensure_ascii=False, indent=2))
+
+
+def _cmd_list(reg: Registry, args) -> int:
+    recs = reg.list_recordings(status=args.status)
+    if args.json:
+        _print_json({"recordings": recs})
+        return 0
+    if not recs:
+        print("Записей не найдено.")
+        return 0
+    for r in recs:
+        dur = f"{r['duration_min']} мин" if r["duration_min"] else "—"
+        print(f"{r['recording_id']}  [{r['status']}]  {r['date']}  {dur}  {r['name']}")
+    return 0
+
+
+def _cmd_show(reg: Registry, args) -> int:
+    rec = reg.get_recording(args.id)
+    if rec is None:
+        print(f"Запись не найдена: {args.id}", file=sys.stderr)
+        return 1
+    rec = dict(rec)
+    rec["participants"] = reg.get_participants(args.id)
+    if args.json:
+        _print_json(rec)
+        return 0
+    print(f"# {rec['name']}")
+    print(f"- ID: {rec['recording_id']}")
+    print(f"- Статус: {rec['status']}")
+    print(f"- Дата: {rec['date']}")
+    print(f"- Длительность: {rec['duration_min']} мин")
+    print(f"- Транскрипт: {rec['transcript_path'] or '—'}")
+    print(f"- Протокол: {rec['protocol_path'] or '—'}")
+    print("- Участники:")
+    for p in rec["participants"]:
+        vault = f" -> {p['vault_id']}" if p["vault_id"] else ""
+        print(f"  - {p['name']} (ktalk:{p['ktalk_id']}){vault}")
+    return 0
+
+
+def _cmd_mark_processing(reg: Registry, args) -> int:
+    reg.mark_processing(args.id)
+    print(f"{args.id}: processing")
+    return 0
+
+
+def _cmd_mark_done(reg: Registry, args) -> int:
+    reg.mark_done(
+        args.id,
+        transcript_path=args.transcript,
+        protocol_path=args.protocol,
+        meeting_type=args.meeting_type,
+    )
+    print(f"{args.id}: done")
+    return 0
+
+
+def _cmd_mark_partial(reg: Registry, args) -> int:
+    reg.mark_partial(args.id, transcript_path=args.transcript, protocol_path=args.protocol)
+    print(f"{args.id}: partial")
+    return 0
+
+
+def _cmd_mark_skipped(reg: Registry, args) -> int:
+    reg.mark_skipped(args.id)
+    print(f"{args.id}: skipped")
+    return 0
+
+
+def _cmd_set_vault_id(reg: Registry, args) -> int:
+    reg.set_vault_id(args.id, args.ktalk_id, args.vault_id)
+    print(f"{args.id}/{args.ktalk_id} -> {args.vault_id}")
+    return 0
+
+
+def _cmd_dashboard(reg: Registry, args) -> int:
+    recs = reg.list_recordings()
+    new = [r for r in recs if r["status"] == "new"]
+    stats = {s: sum(1 for r in recs if r["status"] == s) for s in _STATUSES}
+    if args.json:
+        _print_json({"new": new, "stats": stats})
+        return 0
+    print("# Дашборд KTalk\n")
+    print("## Новые записи")
+    if not new:
+        print("(нет)")
+    for i, r in enumerate(new, 1):
+        print(f"{i}. {r['recording_id']}  {r['date']}  {r['name']}")
+    print(
+        f"\nСтатистика: новых {stats['new']}, в обработке {stats['processing']}, "
+        f"обработано {stats['done']}, пропущено {stats['skipped']}, "
+        f"частично {stats['partial']}"
+    )
+    return 0
+
+
+def _cmd_export(reg: Registry, args) -> int:
+    text = render_markdown_mirror(reg, full=args.full)
+    if args.out:
+        out_path = Path(args.out)
+    else:
+        out_path = Path(resolve_db_path(args.db)).parent / "registry.md"
+    out_path.write_text(text, encoding="utf-8")
+    if args.json:
+        _print_json({"written": str(out_path)})
+    else:
+        print(f"Зеркало записано: {out_path}")
+    return 0
+
+
+def _cmd_migrate(reg: Registry, args) -> int:
+    summary = migrate_from_vault(reg, args.vault_path, dry_run=args.dry_run)
+    if args.json:
+        _print_json(summary)
+    else:
+        print(f"Импортировано записей: {summary['recordings']}")
+        print(f"Участников: {summary['participants']}")
+        print(f"По статусам: {summary['by_status']}")
+        if args.dry_run:
+            print("(dry-run: ничего не записано)")
+    return 0
+
+
+async def _fetch_recordings(days: int) -> list[dict]:
+    settings = Settings()
+    start_from = (date.today() - timedelta(days=days)).isoformat()
+    out: list[dict] = []
+    async with KTalkClient(
+        base_url=settings.ktalk_base_url, session_token=settings.ktalk_session_token
+    ) as client:
+        page_token: str | None = None
+        for _ in range(20):  # page cap
+            data = await client.list_recordings(
+                start_from=start_from, top=1000, page_token=page_token
+            )
+            out.extend(data.get("recordings") or [])
+            page_token = data.get("nextPageToken")
+            if not page_token:
+                break
+    return out
+
+
+def _cmd_sync(reg: Registry, args) -> int:
+    try:
+        recordings = asyncio.run(_fetch_recordings(args.days))
+    except KTalkError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+    inserted = updated = 0
+    for rec in recordings:
+        fields = recording_fields_from_api(rec)
+        if not fields["recording_id"]:
+            continue
+        parts = participants_from_api(rec)
+        result = reg.upsert_recording(fields, participants=parts)
+        if result == "inserted":
+            inserted += 1
+        else:
+            updated += 1
+    expired = reg.expire_new(days=args.days)
+    count = int(reg.get_meta("sync_count") or "0") + 1
+    reg.set_meta("sync_count", str(count))
+    reg.set_meta("last_synced", date.today().isoformat())
+
+    if args.json:
+        recs = reg.list_recordings()
+        stats = {s: sum(1 for r in recs if r["status"] == s) for s in _STATUSES}
+        _print_json(
+            {
+                "synced": len(recordings),
+                "inserted": inserted,
+                "updated": updated,
+                "expired": expired,
+                "stats": stats,
+            }
+        )
+        return 0
+    return _cmd_dashboard(reg, args)
+
+
+_HANDLERS = {
+    "list": _cmd_list,
+    "show": _cmd_show,
+    "mark-processing": _cmd_mark_processing,
+    "mark-done": _cmd_mark_done,
+    "mark-partial": _cmd_mark_partial,
+    "mark-skipped": _cmd_mark_skipped,
+    "set-vault-id": _cmd_set_vault_id,
+    "dashboard": _cmd_dashboard,
+    "export": _cmd_export,
+    "migrate": _cmd_migrate,
+    "sync": _cmd_sync,
+}
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    if not args.command:
+        parser.print_help()
+        return 2
+    db_path = resolve_db_path(args.db)
+    handler = _HANDLERS.get(args.command)
+    if handler is None:
+        parser.print_help()
+        return 2
+    try:
+        with Registry(db_path) as reg:
+            return handler(reg, args)
+    except Exception as exc:  # noqa: BLE001 - surface as CLI error
+        print(f"Ошибка: {exc}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
