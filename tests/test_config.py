@@ -1,3 +1,4 @@
+from pathlib import Path
 
 import pytest
 
@@ -31,3 +32,24 @@ def test_settings_requires_session_token(monkeypatch):
 
     with pytest.raises(Exception):
         Settings()
+
+
+def test_resolve_db_path_default(monkeypatch):
+    monkeypatch.delenv("KTALK_REGISTRY_DB", raising=False)
+    from ktalk_mcp.config import DEFAULT_DB_PATH, resolve_db_path
+
+    assert resolve_db_path() == Path(DEFAULT_DB_PATH)
+
+
+def test_resolve_db_path_env(monkeypatch):
+    monkeypatch.setenv("KTALK_REGISTRY_DB", "/tmp/from-env.db")
+    from ktalk_mcp.config import resolve_db_path
+
+    assert resolve_db_path() == Path("/tmp/from-env.db")
+
+
+def test_resolve_db_path_flag_wins(monkeypatch):
+    monkeypatch.setenv("KTALK_REGISTRY_DB", "/tmp/from-env.db")
+    from ktalk_mcp.config import resolve_db_path
+
+    assert resolve_db_path("/tmp/from-flag.db") == Path("/tmp/from-flag.db")
