@@ -1,0 +1,28 @@
+sequenceDiagram
+    participant Caller as "Caller (MCP tool / CLI sync)"
+    participant Settings as "Settings"
+    participant Client as "KTalkClient"
+    participant Profile as "EndpointProfile[op][mode]"
+    participant API as "KTalk API"
+
+    Caller->>Settings: auth_mode
+    Note over Settings: "KTALK_PERSONAL_API_KEY задан -> api_key;<br/>иначе KTALK_SESSION_TOKEN -> session;<br/>иначе - ошибка конфигурации (один раз при старте)"
+    Caller->>Client: call(operation, params)
+    Client->>Profile: profile = table[operation][auth_mode]
+
+    alt profile is None
+        Client-->>Caller: "OperationNotAvailableError『операция доступна только в режиме персонального ключа』"
+    else profile найден
+        Client->>API: GET profile.path
+        Note right of Client: "Заголовок X-Auth-Token либо query sessionToken -<br/>выбран один раз при конструировании клиента, не здесь"
+        API-->>Client: HTTP response 200/401/403/404/...
+
+        alt status == 401
+            Client-->>Caller: "KTalkAuthError『обновите KTALK_PERSONAL_API_KEY либо KTALK_SESSION_TOKEN по auth_mode』"
+        else status == 403
+            Client-->>Caller: "KTalkScopeError (api_key: назван required_scope) либо『доступ запрещён』(session)"
+        else status == 200
+            Client->>Client: "profile.normalizer(response.json())"
+            Client-->>Caller: normalized result
+        end
+    end

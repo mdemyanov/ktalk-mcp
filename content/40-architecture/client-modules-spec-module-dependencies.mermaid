@@ -1,0 +1,49 @@
+flowchart TD
+    subgraph mcp["MCP-слой 「контент」"]
+        server["server.py"]
+        toolsRec["tools_recordings.py"]
+        toolsMeet["tools_meetings.py"]
+    end
+
+    subgraph cliLayer["CLI-слой 「механика реестра」"]
+        cli["cli.py"]
+    end
+
+    subgraph shared["Общий слой"]
+        client["client.py"]
+        pagination["pagination.py"]
+        download["download.py"]
+        enrichment["enrichment.py"]
+        reconciliation["reconciliation.py"]
+        formatters["formatters.py"]
+        config["config.py"]
+    end
+
+    registry["registry.py 「frozen」"]
+
+    server --> toolsRec
+    server --> toolsMeet
+    server --> config
+    toolsRec --> client
+    toolsRec --> download
+    toolsRec --> formatters
+    toolsMeet --> client
+    toolsMeet --> formatters
+    cli --> client
+    cli --> pagination
+    cli --> enrichment
+    cli --> reconciliation
+    cli --> formatters
+    cli --> registry
+    download --> client
+    download --> pagination
+    enrichment --> client
+    enrichment --> pagination
+    reconciliation --> pagination
+    client --> config
+
+    style registry fill:#fff4e6,stroke:#e67700,stroke-width:2px
+    style pagination fill:#e5dbff,stroke:#5f3dc4,stroke-width:2px
+    style download fill:#e5dbff,stroke:#5f3dc4,stroke-width:2px
+    style enrichment fill:#e5dbff,stroke:#5f3dc4,stroke-width:2px
+    style reconciliation fill:#e5dbff,stroke:#5f3dc4,stroke-width:2px
