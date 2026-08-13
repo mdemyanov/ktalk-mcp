@@ -1,0 +1,19 @@
+{
+  "key": "CONF-BIG",
+  "roomName": "Переговорная 3",
+  "startTime": "2026-06-24T10:00:00Z",
+  "endTime": "2026-06-24T11:00:00Z",
+  "title": "Большая встреча (синтетика для FR-8 AC3)",
+  "participantsCount": 12,
+  "artifacts": {
+    "participants": [
+      {"userInfo": {"key": "u5", "surname": "Смирнов", "firstname": "Глеб"}},
+      {"userInfo": {"key": "u6", "surname": "Волкова", "firstname": "Мария"}},
+      {"userInfo": {"key": "u7", "surname": "Морозов", "firstname": "Данил"}},
+      {"userInfo": {"key": "u8", "surname": "Соколова", "firstname": "Вера"}},
+      {"userInfo": {"key": "u9", "surname": "Лебедев", "firstname": "Артём"}},
+      {"userInfo": {"key": "u10", "surname": "Фёдорова", "firstname": "Ксения"}},
+      {"anonymousName": "Гость 1", "anonymousId": "anon-1", "isAnonymous": true}
+    ]
+  }
+}

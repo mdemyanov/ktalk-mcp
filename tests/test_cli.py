@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import date, timedelta
 from pathlib import Path
 
 
@@ -179,20 +180,30 @@ def test_migrate_dry_run_json(tmp_path, capsys):
 def test_sync_inserts_dedups_and_expires(tmp_path, capsys, monkeypatch, httpx_mock):
     monkeypatch.setenv("KTALK_BASE_URL", "https://test.ktalk.ru")
     monkeypatch.setenv("KTALK_SESSION_TOKEN", "tok")
+    # Изоляция от ADR-003: KTALK_PERSONAL_API_KEY теперь тоже читается Settings и
+    # побеждает по приоритету — тест должен оставаться session-режимным независимо
+    # от окружения, в котором запускается (напр. реальный ключ, оставленный зондом).
+    monkeypatch.delenv("KTALK_PERSONAL_API_KEY", raising=False)
     monkeypatch.delenv("KTALK_REGISTRY_DB", raising=False)
 
     db = tmp_path / "r.db"
+    # Dates are relative to today: expiry compares against date.today(), so hardcoded
+    # fixtures rot — a "fresh" recording eventually drifts past the --days window.
+    today = date.today()
+    yesterday = (today - timedelta(days=1)).isoformat()
+    long_ago = (today - timedelta(days=200)).isoformat()
+
     # Pre-seed an old 'new' recording that must expire, plus one that will be re-synced.
     from ktalk_mcp.registry import Registry
 
     with Registry(db) as reg:
         reg.upsert_recording(
-            {"recording_id": "old", "name": "Old", "date": "2026-01-01"},
-            now="2026-01-01",
+            {"recording_id": "old", "name": "Old", "date": long_ago},
+            now=long_ago,
         )
         reg.upsert_recording(
-            {"recording_id": "dup", "name": "Existing", "date": "2026-06-24"},
-            now="2026-06-24",
+            {"recording_id": "dup", "name": "Existing", "date": yesterday},
+            now=yesterday,
         )
         reg.set_status("dup", "done")
 
@@ -200,15 +211,20 @@ def test_sync_inserts_dedups_and_expires(tmp_path, capsys, monkeypatch, httpx_mo
     httpx_mock.add_response(
         json={
             "recordings": [
-                {"id": "fresh", "title": "Fresh", "createdDate": "2026-06-25T10:00:00Z",
+                {"id": "fresh", "title": "Fresh", "createdDate": f"{today.isoformat()}T10:00:00Z",
                  "duration": 1800,
                  "participants": [{"userInfo": {"key": "668", "surname": "Демьянов",
                                                 "firstname": "Максим"}}]},
                 {"id": "dup", "title": "Existing renamed",
-                 "createdDate": "2026-06-24T10:00:00Z", "duration": 600},
+                 "createdDate": f"{yesterday}T10:00:00Z", "duration": 600},
             ]
         }
     )
+    # FR-14 AC-2 (ADR-003/pagination.py): пагинация продолжается до ПУСТОЙ страницы
+    # буквально по тексту требования, не до "короткой" — не полагаемся на признак
+    # полноты, которого может не быть в ответе. Одна короткая (2 записи) непустая
+    # страница поэтому не последняя сама по себе — нужна завершающая пустая.
+    httpx_mock.add_response(json={"recordings": []})
 
     from ktalk_mcp.cli import main
 

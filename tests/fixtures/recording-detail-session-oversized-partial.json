@@ -1,0 +1,16 @@
+{
+  "id": "REC-BIG",
+  "title": "Большая встреча (синтетика для FR-8 AC3)",
+  "participantsCount": 12,
+  "participants": [
+    {"userInfo": {"key": "u1", "surname": "Иванов", "firstname": "Пётр"}},
+    {"userInfo": {"key": "u2", "surname": "Петров", "firstname": "Анна"}},
+    {"userInfo": {"key": "u3", "surname": "Сидоров", "firstname": "Илья"}},
+    {"userInfo": {"key": "u4", "surname": "Кузнецова", "firstname": "Ольга"}},
+    {"userInfo": {"key": "u5", "surname": "Смирнов", "firstname": "Глеб"}},
+    {"userInfo": {"key": "u6", "surname": "Волкова", "firstname": "Мария"}},
+    {"userInfo": {"key": "u7", "surname": "Морозов", "firstname": "Данил"}},
+    {"userInfo": {"key": "u8", "surname": "Соколова", "firstname": "Вера"}},
+    {"userInfo": {"key": "u9", "surname": "Лебедев", "firstname": "Артём"}}
+  ]
+}

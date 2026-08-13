@@ -1,0 +1,7 @@
+{
+  "expiredAt": "2027-01-01T00:00:00Z",
+  "scopes": [
+    {"type": "recording", "restrictionType": "read"},
+    {"type": "reporting", "restrictionType": "read"}
+  ]
+}

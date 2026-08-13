@@ -1,0 +1,8 @@
+{
+  "conferences": [
+    {"key": "CONF-1", "roomName": "R1", "startTime": "2026-07-01T10:00:00Z",
+     "title": "Встреча 1", "isPlannedMeeting": true, "containsDeepFakeDetections": false},
+    {"key": "CONF-2", "roomName": "R1", "startTime": "2026-07-01T11:00:00Z",
+     "title": "Встреча 2", "isPlannedMeeting": false, "containsDeepFakeDetections": false}
+  ]
+}

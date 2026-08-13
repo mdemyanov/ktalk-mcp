@@ -1,0 +1,8 @@
+{
+  "entities": [
+    {"id": "REC-A3", "key": "KEY-A3", "title": "Запись 3", "createdDate": "2026-07-03T10:00:00Z",
+     "duration": 600, "participantsCount": 2, "participants": []}
+  ],
+  "nextPageToken": null,
+  "prevPageToken": "token-page-1"
+}

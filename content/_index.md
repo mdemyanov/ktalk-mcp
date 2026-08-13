@@ -14,6 +14,7 @@ CLI-реестр на SQLite). Здесь живёт ответ на вопро�
 | [10-domain/](10-domain/) | Исследования предметной области и API Толка | Researcher |
 | [30-requirements/](30-requirements/) | Требования и acceptance-критерии | BA |
 | [40-architecture/](40-architecture/) | Архитектурные спеки к ADR, контракты | SA |
+| [60-implementation/](60-implementation/) | Заметки об особенностях реализации | Dev |
 | [lessons-learned.md](lessons-learned.md) | Append-only журнал уроков | все роли |
 
 ## Что сюда не кладём

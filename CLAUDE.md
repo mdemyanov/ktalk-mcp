@@ -12,8 +12,8 @@
 
 ## Commands
 - `uv run ktalk-mcp` — запуск MCP-сервера
-- `uv run ktalk <команда>` — CLI реестра (`sync`, `dashboard`, `list`, `show`,
-  `mark-processing/done/partial/skipped`, `set-vault-id`, `export`, `migrate`)
+- `uv run ktalk <команда>` — CLI реестра (`sync` [`--dry-run`], `auth-status`, `dashboard`,
+  `list`, `show`, `mark-processing/done/partial/skipped`, `set-vault-id`, `export`, `migrate`)
 - `uv run pytest` — тесты
 - `uv run pytest tests/test_formatters.py -v` — тесты форматтеров
 - `uv run ruff check .` — линтинг
@@ -22,24 +22,45 @@
 
 ## Architecture
 Один пакет `ktalk_mcp`, общие `client.py`/`config.py` для MCP и CLI:
-- `server.py` — MCP tools (5 штук), entry point
+- `server.py` — bootstrap FastMCP + `ktalk_auth_status`, entry point
+- `tools_recordings.py` / `tools_meetings.py` — MCP tools (10 штук) по записям и встречам
 - `cli.py` — CLI: argparse-подкоманды, вывод (`--json` для машинного чтения)
+- `cli_sync.py` — команды `sync` (вкл. `--dry-run`) и `auth-status`
 - `registry.py` — SQLite-слой: схема (WAL), CRUD, дедуп, экспирация, миграция
   из markdown, рендер markdown-зеркала, мапперы API → строки
-- `client.py` — KTalkClient, async httpx обёртка над KTalk API
+- `client.py` — KTalkClient, async httpx обёртка; единая точка диспетчеризации
+- `auth.py` — таблица `OPERATION_PROFILES` (операция × режим → путь + scope + нормализатор),
+  `AuthContext`, нормализаторы ответов, квотирование path-параметров
+- `pagination.py` — единый итератор страниц + клиентское окно дат (`clip_to_window`)
+- `enrichment.py` / `download.py` / `reconciliation.py` — дообогащение участников,
+  потоковое скачивание, сверка идентификаторов перед первым api-key sync
 - `formatters.py` — JSON → markdown конвертеры для каждого типа ответа
-- `config.py` — Settings из env (KTALK_BASE_URL, KTALK_SESSION_TOKEN);
-  `resolve_db_path` (KTALK_REGISTRY_DB / `--db` / дефолт `95_TRANSCRIPTS/.registry.db`)
+- `config.py` — Settings из env; `resolve_db_path`
+  (KTALK_REGISTRY_DB / `--db` / дефолт `95_TRANSCRIPTS/.registry.db`)
 
 ## API Reference
-- OpenAPI спецификация (справочник, есть расхождения): `talk.public.api-api-2.json`
+- OpenAPI спецификация (справочник, **есть расхождения с реальностью**): `talk.public.api-api-2.json`
 - Base URL: https://your-domain.ktalk.ru
-- Auth: query parameter `sessionToken={token}`
-- Список записей: `GET /api/recordings` (поле `recordings[]`, ID в `id`)
-- Детали записи: `GET /api/recordings/{id}`
-- Транскрипт: `GET /api/recordings/{id}/transcript`
-- Саммари (v2): `GET /api/recordings/v2/{id}/summary`
-- Саммари по типу: `GET /api/recordings/{id}/summary/{type}`
+- **Два режима авторизации** (решение — [ADR-003](content/00-project/adr/ADR-003-auth-modes.md)):
+  `KTALK_PERSONAL_API_KEY` → заголовок `X-Auth-Token`; иначе `KTALK_SESSION_TOKEN` →
+  query `sessionToken=`. Ключ побеждает; при обоих заданных session-токен не читается.
+- **Набор путей зависит от режима** — интеграторский контур (`/api/Domain/*`, `/api/Recordings/*`,
+  `/api/ConferenceReports/*`) отдаёт 401/403 по сессии, поэтому пути живут в таблице профилей
+  `auth.py`, а не хардкодом в методах.
+- Session-контур: `GET /api/recordings`, `/api/recordings/{id}`, `/api/conferencesHistory/{key}`
+- Общее для обоих: `/api/recordings/{key}/transcript`, `/api/recordings/v2/{key}/summary`,
+  `/api/recordings/{key}/summary/{type}`
+
+### Поведение API, проверенное эмпирически (спеке здесь верить нельзя)
+- `top` максимум **100**, не 1000: `400 «The field Top must be between 1 and 100»`.
+- `nextPageToken` во внутреннем контуре **не существует** — пагинация только через `skip`.
+- `startFrom`/`startTo` **игнорируются**: окно дат обеспечивает клиент (`clip_to_window`),
+  обход прекращается на первой странице за порогом. Выдача отсортирована от новых к старым.
+- `maxParticipantCount` в списке имеет максимум 10 и дефолт 6 — полный состав участников
+  берётся дообогащением по каждой записи, а не из списка.
+- Чат требует необъявленный в спеке параметр `channel` (рабочее значение `general`).
+- **401 ≠ 403**: 401 — ключ/токен невалиден, 403 — валиден, но не хватает scope. Тело 403
+  обычно пустое, диагностика строится на коде ответа и требуемом scope операции.
 
 ## Conventions
 - Async everywhere (httpx, fastmcp)
@@ -67,7 +88,8 @@
 (они остаются как есть, ретроспективно не переносятся). Решение принято —
 пиши ADR; описываешь «что должно работать» — пиши требование.
 - `content/00-project/` — roadmap и ADR; `10-domain/` — исследования;
-  `30-requirements/` — требования и AC; `40-architecture/` — спеки и контракты.
+  `30-requirements/` — требования и AC; `40-architecture/` — спеки и контракты;
+  `60-implementation/` — заметки Dev о том, где реализация разошлась со спекой и почему.
 - Каждая статья (кроме `_index.md`) обязана нести `properties: - name: Тип контента`
   в object-нотации и быть достижимой по ссылке из `_index.md` — иначе гейт даёт
   error (нет типа) или warning (сирота).

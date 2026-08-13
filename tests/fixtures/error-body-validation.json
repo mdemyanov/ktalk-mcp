@@ -1,0 +1,6 @@
+{
+  "errorId": "b6f1e2a0-0000-4000-8000-000000000001",
+  "errorType": "ValidationError",
+  "errorCode": "ValidationError",
+  "errorMessage": "The field Top must be between 1 and 100."
+}

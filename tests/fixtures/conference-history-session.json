@@ -1,0 +1,17 @@
+{
+  "key": "CONF-SYNC-001",
+  "roomName": "Переговорная 3",
+  "startTime": "2026-06-24T10:00:00Z",
+  "endTime": "2026-06-24T10:30:00Z",
+  "title": "Еженедельный синк команды",
+  "participantsCount": 8,
+  "artifacts": {
+    "participants": [
+      {"userInfo": {"key": "u1", "surname": "Иванов", "firstname": "Пётр"}},
+      {"userInfo": {"key": "u5", "surname": "Смирнов", "firstname": "Глеб"}},
+      {"userInfo": {"key": "u9", "surname": "Лебедев", "firstname": "Артём"}},
+      {"anonymousName": "Гость 1", "anonymousId": "anon-1", "isAnonymous": true},
+      {"anonymousName": "Гость 3", "anonymousId": "anon-3", "isAnonymous": true}
+    ]
+  }
+}

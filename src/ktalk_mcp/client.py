@@ -1,6 +1,32 @@
+"""Async HTTP client for KTalk API — режимы авторизации, профиль эндпоинтов,
+диагностика 401/403, диагностика ключа/токена (ADR-003).
+
+Таблица профиля/DTO/нормализаторы вынесены в `ktalk_mcp.auth` (гейт C13); публичные
+имена, которые тесты и остальной код ожидают именно из `ktalk_mcp.client`
+(`AuthStatus`, `normalize_list_session`, `normalize_list_apikey`, ...), реэкспортированы
+ниже — расположение импорта не влияет на видимость атрибута модуля.
+"""
+
 from __future__ import annotations
 
 import httpx
+
+from ktalk_mcp.auth import (  # noqa: F401 - реэкспорт публичного контракта модуля
+    OPERATION_LABELS,
+    OPERATION_PROFILES,
+    SCOPE_LABELS,
+    AuthContext,
+    AuthStatus,
+    EndpointProfile,
+    full_participants_apikey,
+    merge_participants,
+    normalize_list_apikey,
+    normalize_list_session,
+    quote_path_param,
+    resolve_chat_channel,
+)
+from ktalk_mcp.config import AuthMode, Settings
+from ktalk_mcp.pagination import paginate_pages, skip_pages
 
 
 class KTalkError(Exception):
@@ -8,11 +34,19 @@ class KTalkError(Exception):
 
 
 class KTalkAuthError(KTalkError):
-    """Session token expired or invalid."""
+    """Session token or personal API key expired or invalid."""
+
+
+class KTalkScopeError(KTalkAuthError):
+    """API key valid, but lacks the required scope for the operation."""
 
 
 class KTalkNotFoundError(KTalkError):
     """Recording not found."""
+
+
+class OperationNotAvailableError(KTalkError):
+    """Operation has no endpoint profile for the currently active auth mode."""
 
 
 class KTalkClient:
@@ -20,16 +54,43 @@ class KTalkClient:
 
     Usage::
 
-        async with KTalkClient(base_url, session_token) as client:
+        async with KTalkClient(base_url, session_token=..., personal_api_key=...) as client:
             recordings = await client.list_recordings()
+
+    Ровно один из `session_token`/`personal_api_key` определяет режим (ADR-003):
+    ключ побеждает, если задано и то, и другое; ни один из двух не отправляется
+    вместе с механизмом другого режима — заголовок либо query-параметр настраиваются
+    один раз при конструировании, не проверяются на каждый запрос.
     """
 
-    def __init__(self, base_url: str, session_token: str) -> None:
-        self._session_token = session_token
-        self._client = httpx.AsyncClient(
-            base_url=base_url,
-            params={"sessionToken": session_token},
-            timeout=30.0,
+    def __init__(
+        self,
+        base_url: str,
+        session_token: str | None = None,
+        personal_api_key: str | None = None,
+    ) -> None:
+        self._auth = AuthContext.resolve(
+            session_token=session_token, personal_api_key=personal_api_key
+        )
+        if self._auth.mode is AuthMode.API_KEY:
+            self._client = httpx.AsyncClient(
+                base_url=base_url,
+                headers={"X-Auth-Token": self._auth.credential},
+                timeout=30.0,
+            )
+        else:
+            self._client = httpx.AsyncClient(
+                base_url=base_url,
+                params={"sessionToken": self._auth.credential},
+                timeout=30.0,
+            )
+
+    @classmethod
+    def from_settings(cls, settings: Settings) -> KTalkClient:
+        return cls(
+            base_url=settings.ktalk_base_url,
+            session_token=settings.ktalk_session_token,
+            personal_api_key=settings.ktalk_personal_api_key,
         )
 
     async def __aenter__(self) -> KTalkClient:
@@ -38,15 +99,66 @@ class KTalkClient:
     async def __aexit__(self, *args: object) -> None:
         await self._client.aclose()
 
-    def _check_response(self, response: httpx.Response, context: str = "") -> None:
-        if response.status_code in (401, 403):
+    @property
+    def auth_mode(self) -> AuthMode:
+        return self._auth.mode
+
+    def stream(self, method: str, url: str):
+        """Потоковый запрос без буферизации целиком (FR-7 AC4) — для `download.py`."""
+        return self._client.stream(method, url)
+
+    def check_response(self, response: httpx.Response, required_scope: str | None = None) -> None:
+        """Публичная обёртка над `_classify` — для потоковых вызовов вне `_call`."""
+        self._classify(response, required_scope)
+
+    def _profile_for(self, operation: str) -> EndpointProfile:
+        profile = OPERATION_PROFILES.get(operation, {}).get(self._auth.mode)
+        if profile is None:
+            label = OPERATION_LABELS.get(operation, operation)
+            raise OperationNotAvailableError(
+                f"Операция «{label}» доступна только в режиме персонального ключа "
+                "(переменная KTALK_PERSONAL_API_KEY)."
+            )
+        return profile
+
+    def _classify(self, response: httpx.Response, required_scope: str | None) -> None:
+        if response.status_code == 401:
+            if self._auth.mode is AuthMode.API_KEY:
+                raise KTalkAuthError(
+                    "Ключ авторизации истёк или невалиден. "
+                    "Обновите KTALK_PERSONAL_API_KEY (см. README)."
+                )
             raise KTalkAuthError(
-                "Токен сессии истёк или невалиден. "
-                "Обновите KTALK_SESSION_TOKEN (см. README)."
+                "Токен сессии истёк или невалиден. Обновите KTALK_SESSION_TOKEN (см. README)."
+            )
+        if response.status_code == 403:
+            if self._auth.mode is AuthMode.API_KEY:
+                if required_scope:
+                    label = SCOPE_LABELS.get(required_scope, required_scope)
+                    raise KTalkScopeError(
+                        f"Ключу не хватает разрешения «{label}» ({required_scope}). "
+                        "Добавьте его ключу в настройках Толка (администратор домена)."
+                    )
+                raise KTalkAuthError("Доступ запрещён. Обратитесь к администратору Толка.")
+            # Session-режим: у токена нет понятия scope, но 403 — это не 401.
+            # Раньше оба кода давали одно сообщение «токен истёк», и пользователь,
+            # упёршийся в нехватку прав, шёл обновлять рабочий токен. Решение
+            # ADR-003: коды разводятся, потому что действия по ним разные.
+            raise KTalkAuthError(
+                "Доступ запрещён: у текущей сессии нет прав на эту операцию. "
+                "Токен при этом рабочий — обновлять его не нужно."
             )
         if response.status_code == 404:
-            raise KTalkNotFoundError(f"Ресурс не найден: {context}")
-        response.raise_for_status()
+            raise KTalkNotFoundError("Ресурс не найден.")
+        if response.status_code >= 400:
+            raise KTalkError(f"Ошибка API Контур.Толк: HTTP {response.status_code}.")
+
+    async def _call(self, operation: str, params: dict) -> dict:
+        profile = self._profile_for(operation)
+        path = profile.path_template.format(**{k: quote_path_param(v) for k, v in params.items()})
+        response = await self._client.get(path)
+        self._classify(response, profile.required_scope)
+        return response.json()
 
     async def list_recordings(
         self,
@@ -55,10 +167,12 @@ class KTalkClient:
         start_from: str | None = None,
         start_to: str | None = None,
         top: int = 30,
+        skip: int = 0,
         order_mode: str = "byTimeNewFirst",
         page_token: str | None = None,
         title: str | None = None,
     ) -> dict:
+        profile = self._profile_for("list_recordings")
         params: dict = {"top": top, "orderMode": order_mode}
         if query is not None:
             params["query"] = query
@@ -66,39 +180,170 @@ class KTalkClient:
             params["startFrom"] = start_from
         if start_to is not None:
             params["startTo"] = start_to
-        if page_token is not None:
-            params["pageTokenString"] = page_token
         if title is not None:
             params["title"] = title
-
-        response = await self._client.get("/api/recordings", params=params)
-        self._check_response(response, "список записей")
+        if self._auth.mode is AuthMode.API_KEY:
+            if page_token is not None:
+                params["pageTokenString"] = page_token
+        elif skip:
+            params["skip"] = skip
+        response = await self._client.get(profile.path_template, params=params)
+        self._classify(response, profile.required_scope)
         return response.json()
 
     async def get_recording(self, recording_key: str) -> dict:
-        response = await self._client.get(
-            f"/api/recordings/{recording_key}",
-        )
-        self._check_response(response, f"запись {recording_key}")
-        return response.json()
+        return await self._call("get_recording", {"key": recording_key})
 
     async def get_transcript(self, recording_key: str) -> dict:
-        response = await self._client.get(
-            f"/api/recordings/{recording_key}/transcript"
-        )
-        self._check_response(response, f"транскрипт {recording_key}")
-        return response.json()
+        return await self._call("get_transcript", {"key": recording_key})
 
     async def get_summary(self, recording_key: str) -> dict:
-        response = await self._client.get(
-            f"/api/recordings/v2/{recording_key}/summary"
-        )
-        self._check_response(response, f"саммари {recording_key}")
-        return response.json()
+        return await self._call("get_summary", {"key": recording_key})
 
     async def get_summary_by_type(self, recording_key: str, summary_type: str) -> dict:
-        response = await self._client.get(
-            f"/api/recordings/{recording_key}/summary/{summary_type}"
+        return await self._call(
+            "get_summary_by_type", {"key": recording_key, "summary_type": summary_type}
         )
-        self._check_response(response, f"саммари {summary_type} для {recording_key}")
-        return response.json()
+
+    async def list_archive(
+        self,
+        *,
+        from_date: str,
+        to_date: str,
+        room_names: list[str] | None = None,
+        page_size: int = 100,
+    ) -> list[dict]:
+        profile = self._profile_for("list_archive")
+
+        async def raw_fetch(skip: int, top: int) -> dict:
+            params: dict = {"fromDate": from_date, "toDate": to_date, "skip": skip, "take": top}
+            if room_names:
+                params["roomName"] = room_names
+            response = await self._client.get(profile.path_template, params=params)
+            self._classify(response, profile.required_scope)
+            return response.json()
+
+        fetch_page = skip_pages(raw_fetch, page_size=page_size, items_key="conferences")
+        out: list[dict] = []
+        async for page in paginate_pages(fetch_page):
+            out.extend(page)
+        return out
+
+    async def get_conference(self, conference_key: str) -> dict:
+        return await self._call("get_conference", {"key": conference_key})
+
+    async def get_full_participants(self, recording_key: str) -> dict:
+        """Полный состав участников (FR-8): api-key — паджинированный путь профиля,
+        session — объединение get_recording + get_conference (ADR-003-spec, п.2
+        «Закрытые открытые вопросы BA»), с явным `incomplete`, если всё равно короче
+        `participantsCount`."""
+        if self._auth.mode is AuthMode.API_KEY:
+            return await full_participants_apikey(self, recording_key)
+        detail = await self.get_recording(recording_key)
+        conference_key = detail.get("conferenceKey") or recording_key
+        conference = await self.get_conference(conference_key)
+        conf_participants = (conference.get("artifacts") or {}).get("participants") or []
+        merged = merge_participants(detail.get("participants") or [], conf_participants)
+        count = detail.get("participantsCount", len(merged))
+        return {"participants": merged, "incomplete": len(merged) < count}
+
+    async def get_chat_messages(
+        self,
+        recording_key: str | None = None,
+        conference_key: str | None = None,
+        channel: str | None = None,
+    ) -> list[dict]:
+        """Оркестрация FR-10: recording_key -> conferenceKey -> канал -> сообщения."""
+        if conference_key is None:
+            if recording_key is None:
+                raise ValueError("Нужен recording_key или conference_key")
+            detail = await self.get_recording(recording_key)
+            conference_key = detail.get("conferenceKey") or recording_key
+        if channel is None:
+            channel = await resolve_chat_channel(self, conference_key)
+        return await self._fetch_chat_messages(conference_key, channel)
+
+    async def _fetch_chat_messages(self, conference_key: str, channel: str) -> list[dict]:
+        key = quote_path_param(conference_key)
+        if self._auth.mode is AuthMode.API_KEY:
+            path = f"/api/ConferenceReports/{key}/messages"
+            scope = "application.reporting.read"
+        else:
+            path = f"/api/conferencesHistory/{key}/chat/messages"
+            scope = None
+        response = await self._client.get(path, params={"channel": channel})
+        if response.status_code == 403:
+            raise KTalkError(
+                f"Нет прав на получение сообщений чат-канала «{channel}» (см. README)."
+            )
+        self._classify(response, scope)
+        return response.json().get("messages", [])
+
+    async def get_participants_report(self, conference_key: str) -> dict:
+        return await self._call("get_participants_report", {"key": conference_key})
+
+    async def get_auth_status(self) -> AuthStatus:
+        if self._auth.mode is AuthMode.API_KEY:
+            return await self._auth_status_apikey()
+        return await self._auth_status_session()
+
+    async def _auth_status_apikey(self) -> AuthStatus:
+        response = await self._client.get("/api/domain/applications/access-info")
+        if response.status_code == 401:
+            return AuthStatus(
+                alive=False,
+                scopes=None,
+                expired_at=None,
+                note="Ключ авторизации истёк или невалиден.",
+            )
+        if response.status_code == 403:
+            # Зонд Ф-12: 403 на access-info значит «ключ жив», не «ключ мёртв» — сам
+            # запрос диагностики требует application.applications.read.
+            return AuthStatus(
+                alive=True,
+                scopes=None,
+                expired_at=None,
+                note=(
+                    "Ключ валиден, но не хватает разрешения application.applications.read "
+                    "для просмотра списка scope'ов."
+                ),
+            )
+        if response.status_code != 200:
+            raise KTalkError(
+                f"Ошибка API Контур.Толк при диагностике ключа: HTTP {response.status_code}."
+            )
+        data = response.json()
+        return AuthStatus(
+            alive=True, scopes=data.get("scopes"), expired_at=data.get("expiredAt"), note=None
+        )
+
+    async def _auth_status_session(self) -> AuthStatus:
+        try:
+            await self.list_recordings(top=1)
+        except KTalkAuthError:
+            return AuthStatus(
+                alive=False,
+                scopes=None,
+                expired_at=None,
+                note="Токен сессии не прошёл проверку (пробный запрос списка записей).",
+            )
+        return AuthStatus(
+            alive=True,
+            scopes=None,
+            expired_at=None,
+            note=(
+                "У сессионного токена нет понятия scope/срока действия — выполнена "
+                "пробная проверка list_recordings(top=1), а не имитация без сети."
+            ),
+        )
+
+
+_shared_client: KTalkClient | None = None
+
+
+def get_shared_client() -> KTalkClient:
+    """Singleton клиента для MCP-инструментов (было `server.py::_get_client`)."""
+    global _shared_client
+    if _shared_client is None:
+        _shared_client = KTalkClient.from_settings(Settings())
+    return _shared_client
