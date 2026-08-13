@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# Git pre-commit hook — запускает scripts/check.sh --fast.
+# Активация: bash scripts/install-hooks.sh (или git config core.hooksPath .githooks)
+# Bypass: git commit --no-verify
+
+set -e
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT"
+
+if [[ ! -f scripts/check.sh ]]; then
+  echo "WARNING: scripts/check.sh не найден; pre-commit skipped" >&2
+  exit 0
+fi
+
+exec bash scripts/check.sh --fast

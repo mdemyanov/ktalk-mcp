@@ -18,6 +18,7 @@
 - `uv run pytest tests/test_formatters.py -v` — тесты форматтеров
 - `uv run ruff check .` — линтинг
 - `uv run ruff check . --fix` — автоисправление
+- `bash scripts/check.sh --fast` — гейты контура (тот же прогон, что на pre-commit)
 
 ## Architecture
 Один пакет `ktalk_mcp`, общие `client.py`/`config.py` для MCP и CLI:
@@ -60,3 +61,37 @@
 - Путь к БД бинарный → gitignore в vault (`.registry.db`, `-wal`, `-shm`).
 - `ktalk migrate <vault>` — разовый импорт из markdown-реестров; парсер
   устойчив к 7/8-колоночным архивам и `|` внутри ячеек.
+
+## Документарный контур (плагин nauta)
+Решения живут в `content/`, не в этом файле и не в планах `docs/superpowers/`
+(они остаются как есть, ретроспективно не переносятся). Решение принято —
+пиши ADR; описываешь «что должно работать» — пиши требование.
+- `content/00-project/` — roadmap и ADR; `10-domain/` — исследования;
+  `30-requirements/` — требования и AC; `40-architecture/` — спеки и контракты.
+- Каждая статья (кроме `_index.md`) обязана нести `properties: - name: Тип контента`
+  в object-нотации и быть достижимой по ссылке из `_index.md` — иначе гейт даёт
+  error (нет типа) или warning (сирота).
+- ADR длиннее 150 строк не проходит: детализация выносится в companion-спеку
+  `content/40-architecture/<stem>-spec.md`.
+- Роли вызываются как `/nauta:pm decompose <фича>`, дальше `/nauta:ba`, `/nauta:sa`,
+  `/nauta:dev`, `/nauta:qa`. PM декомпозирует, но не пишет код.
+
+## Гейты (pre-commit)
+`core.hooksPath=.githooks` → `scripts/check.sh --fast`. Требует `uv` в PATH.
+- Пороги — в `.nauta-gates.yaml`, откалиброваны замером этого репозитория;
+  обоснование и правило пересмотра: `content/40-architecture/ADR-001-nauta-contour-spec.md`.
+- `src/ktalk_mcp/registry.py` заморожен грандфазером на 562 строках: рост даёт
+  error. Снимается расщеплением класса `Registry`, не поднятием потолка.
+- `scripts/` и `.githooks/` — payload плагина, приезжает через `/nauta:sync-scripts`
+  и отслеживается по sha256 в `.nauta-scripts-basis.yaml`. Правка руками превращает
+  файл в конфликт и он перестаёт обновляться; нужна своя версия — путь в `skip:`.
+- Обход разовый: `git commit --no-verify`. Отключить: `git config --unset core.hooksPath`.
+
+## Gramax (плагин gramax)
+`content/` — валидный Gramax-каталог, `content/.doc-root.yaml` принадлежит Gramax,
+конфигурацию гейтов туда не класть (для неё есть `.nauta-gates.yaml`).
+- Новое значение свойства сначала объявляется в `.doc-root.yaml`, потом
+  используется в статье; `filterProperties` правится синхронно с `properties`.
+- В `_index.md` не бывает `properties` — раздел не имеет своего типа и статуса.
+- Диаграммы — скиллом `mermaid`: отдельный `.mermaid`-файл рядом со статьёй,
+  не inline-блок.

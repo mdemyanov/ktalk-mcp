@@ -1,0 +1,49 @@
+code: KTALK-MCP
+title: ktalk-mcp
+description: Документарный контур ktalk-mcp — решения, требования, архитектура, исследования
+style: blue-green
+language: ru
+supportedLanguages:
+  - ru
+syntax: XML
+
+properties:
+  - name: Тип контента
+    type: Enum
+    style: blue
+    icon: file-text
+    values:
+      - ADR
+      - Архитектура
+      - Требование
+      - Исследование
+      - Roadmap
+      - Runbook
+      - Test Design
+      - Test Report
+      - Прочее
+
+  - name: Фаза
+    type: Enum
+    style: green
+    icon: layers
+    values:
+      - PoC
+      - MVP
+      - Pilot
+      - Production
+
+  - name: Статус
+    type: Enum
+    style: orange
+    icon: check-circle
+    values:
+      - Draft
+      - Review
+      - Approved
+      - Superseded
+
+filterProperties: [Тип контента, Фаза, Статус]
+
+editors:
+  - qutask@gmail.com
