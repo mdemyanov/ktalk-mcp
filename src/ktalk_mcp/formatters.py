@@ -25,6 +25,14 @@ def format_raw(data: dict) -> str:
     return json.dumps(data, ensure_ascii=False, indent=2)
 
 
+def render_tool_output(data: dict, fmt: str, formatter, **kwargs) -> str:
+    """Диспетчер raw/markdown, общий для MCP-инструментов и CLI (было
+    `server.py::_format_output`)."""
+    if fmt == "raw":
+        return format_raw(data)
+    return formatter(data, **kwargs)
+
+
 def _format_duration(seconds: int) -> str:
     """Format duration in seconds to human-readable Russian string."""
     if seconds < 3600:
@@ -368,3 +376,68 @@ def format_summary_by_type(data: dict, summary_type: str) -> str:
 
     chunks_text = _format_summary_chunks(data.get("chunks"))
     return f"# {title}\n\n{chunks_text}"
+
+
+def format_participants(data: dict) -> str:
+    """Format `ktalk_get_participants` result (FR-8) to markdown."""
+    participants = data.get("participants") or []
+    lines = [f"# Участники ({len(participants)})", ""]
+    if data.get("incomplete"):
+        lines.append("> Внимание: состав может быть неполным (`incomplete: true`).")
+        lines.append("")
+    for p in participants:
+        name = p.get("name") or "Неизвестный"
+        pid = p.get("ktalk_id") or p.get("anonymous_id") or "—"
+        lines.append(f"- {name} (id: {pid})")
+    return "\n".join(lines)
+
+
+def format_download_result(data: dict) -> str:
+    """Format `ktalk_download_recording` result (FR-7) to markdown."""
+    return (
+        "# Скачивание завершено\n\n"
+        f"- **Файл:** {data.get('path')}\n"
+        f"- **Качество:** {data.get('quality')}\n"
+        f"- **Размер:** {data.get('bytes', 0)} байт\n"
+    )
+
+
+def format_archive_list(data: dict | list) -> str:
+    """Format `ktalk_list_archive` result (FR-9) to markdown."""
+    meetings = data if isinstance(data, list) else data.get("conferences") or []
+    if not meetings:
+        return "# Архив встреч\n\nВстреч не найдено."
+    lines = ["# Архив встреч", "", "| Ключ | Название | Комната | Начало |", "|---|---|---|---|"]
+    for m in meetings:
+        lines.append(
+            f"| {m.get('key', 'N/A')} | {m.get('title', 'Без названия')} | "
+            f"{m.get('roomName', '')} | {_format_datetime(m.get('startTime'))} |"
+        )
+    return "\n".join(lines)
+
+
+def format_chat_messages(data: dict | list) -> str:
+    """Format `ktalk_get_chat_messages` result (FR-10) to markdown."""
+    messages = data if isinstance(data, list) else data.get("messages") or []
+    if not messages:
+        return "# Сообщения чата\n\nСообщений не найдено."
+    lines = ["# Сообщения чата", ""]
+    for m in messages:
+        lines.append(f"- {m.get('text', '')}")
+    return "\n".join(lines)
+
+
+def format_auth_status(data: dict) -> str:
+    """Format `ktalk_auth_status`/`ktalk auth-status` result (FR-11) to markdown."""
+    lines = [
+        "# Диагностика авторизации",
+        "",
+        f"- **Активна:** {'да' if data.get('alive') else 'нет'}",
+    ]
+    if data.get("scopes") is not None:
+        lines.append(f"- **Разрешения:** {data['scopes']}")
+    if data.get("expired_at") is not None:
+        lines.append(f"- **Истекает:** {data['expired_at']}")
+    if data.get("note"):
+        lines.append(f"- **Примечание:** {data['note']}")
+    return "\n".join(lines)

@@ -118,13 +118,19 @@ async def test_error_401(httpx_mock: HTTPXMock, base_url, session_token):
 
 
 async def test_error_403(httpx_mock: HTTPXMock, base_url, session_token):
+    """403 в session-режиме — это нехватка прав, а не истёкший токен (ADR-003).
+
+    Контракт изменён осознанно: раньше 401 и 403 давали одно сообщение, и при
+    отказе по правам пользователю советовали обновить рабочий токен.
+    """
     httpx_mock.add_response(status_code=403, text="Forbidden")
 
     from ktalk_mcp.client import KTalkAuthError, KTalkClient
 
     async with KTalkClient(base_url=base_url, session_token=session_token) as client:
-        with pytest.raises(KTalkAuthError, match="Токен сессии истёк"):
+        with pytest.raises(KTalkAuthError, match="Доступ запрещён") as exc:
             await client.list_recordings()
+    assert "истёк" not in str(exc.value), "403 не должен советовать обновлять токен"
 
 
 async def test_error_404(httpx_mock: HTTPXMock, base_url, session_token):
@@ -135,3 +141,40 @@ async def test_error_404(httpx_mock: HTTPXMock, base_url, session_token):
     async with KTalkClient(base_url=base_url, session_token=session_token) as client:
         with pytest.raises(KTalkNotFoundError, match="не найден"):
             await client.get_recording("bad-key")
+
+
+async def test_get_recording_quotes_path_traversal_in_key(
+    httpx_mock: HTTPXMock, base_url, session_token
+):
+    """Security review SEC-001: `recording_key` подставлялся в `path_template.format(...)`
+    без квотирования — "../" в значении меняло фактический путь запроса на проводе
+    (например, "../admin" без квотирования отправило бы буквальный
+    `/api/recordings/../admin`, который схлопывается в `/api/admin` до диспетчеризации
+    `OPERATION_PROFILES`, ради которой ADR-003 и вводил профиль). `raw_path` — то, что
+    реально уходит на сервер (в отличие от декодирующего удобного `.path`)."""
+    httpx_mock.add_response(json={"id": "n/a"})
+
+    from ktalk_mcp.client import KTalkClient
+
+    async with KTalkClient(base_url=base_url, session_token=session_token) as client:
+        await client.get_recording("../admin")
+
+    request = httpx_mock.get_request()
+    assert request.url.raw_path == b"/api/recordings/..%2Fadmin?sessionToken=test-session-token"
+
+
+async def test_get_chat_messages_quotes_conference_key(
+    httpx_mock: HTTPXMock, base_url, session_token
+):
+    """Тот же класс дефекта (SEC-001) в `_fetch_chat_messages` — путь строился f-строкой
+    без квотирования `conference_key`."""
+    httpx_mock.add_response(json={"messages": []})
+
+    from ktalk_mcp.client import KTalkClient
+
+    async with KTalkClient(base_url=base_url, session_token=session_token) as client:
+        await client.get_chat_messages(conference_key="../secret", channel="general")
+
+    request = httpx_mock.get_request()
+    assert b"..%2Fsecret" in request.url.raw_path
+    assert b"/api/conferencesHistory/..%2Fsecret/chat/messages" in request.url.raw_path

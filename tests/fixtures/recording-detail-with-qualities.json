@@ -1,0 +1,10 @@
+{
+  "id": "REC-DL-001",
+  "title": "Демо-запись для скачивания",
+  "qualities": [
+    {"name": "240p", "fileUrl": "/recording-blob/REC-DL-001/240p", "status": "complete",
+     "progress": 100, "size": {"width": 426, "height": 240}},
+    {"name": "900p", "fileUrl": "/recording-blob/REC-DL-001/900p", "status": "complete",
+     "progress": 100, "size": {"width": 1600, "height": 900}}
+  ]
+}

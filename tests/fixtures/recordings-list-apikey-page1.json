@@ -1,0 +1,10 @@
+{
+  "entities": [
+    {"id": "REC-A1", "key": "KEY-A1", "title": "Запись 1", "createdDate": "2026-07-01T10:00:00Z",
+     "duration": 600, "participantsCount": 2, "participants": []},
+    {"id": "REC-A2", "key": "KEY-A2", "title": "Запись 2", "createdDate": "2026-07-02T10:00:00Z",
+     "duration": 600, "participantsCount": 2, "participants": []}
+  ],
+  "nextPageToken": "token-page-2",
+  "prevPageToken": null
+}

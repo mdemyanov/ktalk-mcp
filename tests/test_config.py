@@ -25,13 +25,19 @@ def test_settings_default_base_url(monkeypatch):
 
 
 def test_settings_requires_session_token(monkeypatch):
+    """ADR-003: оба секретных поля Optional на уровне модели — Settings() больше не
+    падает сама по себе. Ошибка конфигурации (KTalkConfigError) откладывается до
+    обращения к `.auth_mode`, единственной точке приоритета ключ -> сессия -> ошибка.
+    Обновлено по решению PM (см. at-design-personal-api-key.md, «Известные конфликты»)."""
     monkeypatch.delenv("KTALK_SESSION_TOKEN", raising=False)
+    monkeypatch.delenv("KTALK_PERSONAL_API_KEY", raising=False)
     monkeypatch.delenv("KTALK_BASE_URL", raising=False)
 
-    from ktalk_mcp.config import Settings
+    from ktalk_mcp.config import KTalkConfigError, Settings
 
-    with pytest.raises(Exception):
-        Settings()
+    settings = Settings()  # не поднимает исключение
+    with pytest.raises(KTalkConfigError):
+        _ = settings.auth_mode
 
 
 def test_resolve_db_path_default(monkeypatch):

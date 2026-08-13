@@ -3,21 +3,13 @@
 from __future__ import annotations
 
 import argparse
-import asyncio
 import json
 import sys
-from datetime import date, timedelta
 from pathlib import Path
 
-from ktalk_mcp.client import KTalkClient, KTalkError
-from ktalk_mcp.config import Settings, resolve_db_path
-from ktalk_mcp.registry import (
-    Registry,
-    migrate_from_vault,
-    participants_from_api,
-    recording_fields_from_api,
-    render_markdown_mirror,
-)
+from ktalk_mcp.cli_sync import cmd_auth_status, cmd_sync
+from ktalk_mcp.config import redact_secrets, resolve_db_path
+from ktalk_mcp.registry import Registry, migrate_from_vault, render_markdown_mirror
 
 _STATUSES = ("new", "processing", "done", "skipped", "partial")
 
@@ -73,6 +65,10 @@ def build_parser() -> argparse.ArgumentParser:
     p_sync = sub.add_parser("sync", help="Синхронизация с KTalk")
     p_sync.add_argument("--days", type=int, default=7)
     p_sync.add_argument("--json", action="store_true")
+    p_sync.add_argument("--dry-run", action="store_true", help="Сверка id без записи (FR-15)")
+
+    p_auth = sub.add_parser("auth-status", help="Диагностика авторизации (FR-11)")
+    p_auth.add_argument("--json", action="store_true")
 
     return parser
 
@@ -202,63 +198,6 @@ def _cmd_migrate(reg: Registry, args) -> int:
     return 0
 
 
-async def _fetch_recordings(days: int) -> list[dict]:
-    settings = Settings()
-    start_from = (date.today() - timedelta(days=days)).isoformat()
-    out: list[dict] = []
-    async with KTalkClient(
-        base_url=settings.ktalk_base_url, session_token=settings.ktalk_session_token
-    ) as client:
-        page_token: str | None = None
-        for _ in range(20):  # page cap
-            data = await client.list_recordings(
-                start_from=start_from, top=1000, page_token=page_token
-            )
-            out.extend(data.get("recordings") or [])
-            page_token = data.get("nextPageToken")
-            if not page_token:
-                break
-    return out
-
-
-def _cmd_sync(reg: Registry, args) -> int:
-    try:
-        recordings = asyncio.run(_fetch_recordings(args.days))
-    except KTalkError as exc:
-        print(str(exc), file=sys.stderr)
-        return 1
-    inserted = updated = 0
-    for rec in recordings:
-        fields = recording_fields_from_api(rec)
-        if not fields["recording_id"]:
-            continue
-        parts = participants_from_api(rec)
-        result = reg.upsert_recording(fields, participants=parts)
-        if result == "inserted":
-            inserted += 1
-        else:
-            updated += 1
-    expired = reg.expire_new(days=args.days)
-    count = int(reg.get_meta("sync_count") or "0") + 1
-    reg.set_meta("sync_count", str(count))
-    reg.set_meta("last_synced", date.today().isoformat())
-
-    if args.json:
-        recs = reg.list_recordings()
-        stats = {s: sum(1 for r in recs if r["status"] == s) for s in _STATUSES}
-        _print_json(
-            {
-                "synced": len(recordings),
-                "inserted": inserted,
-                "updated": updated,
-                "expired": expired,
-                "stats": stats,
-            }
-        )
-        return 0
-    return _cmd_dashboard(reg, args)
-
-
 _HANDLERS = {
     "list": _cmd_list,
     "show": _cmd_show,
@@ -270,7 +209,8 @@ _HANDLERS = {
     "dashboard": _cmd_dashboard,
     "export": _cmd_export,
     "migrate": _cmd_migrate,
-    "sync": _cmd_sync,
+    "sync": cmd_sync,
+    "auth-status": cmd_auth_status,
 }
 
 
@@ -289,7 +229,10 @@ def main(argv: list[str] | None = None) -> int:
         with Registry(db_path) as reg:
             return handler(reg, args)
     except Exception as exc:  # noqa: BLE001 - surface as CLI error
-        print(f"Ошибка: {exc}", file=sys.stderr)
+        # NFR-5: последний рубеж маскирования перед печатью — покрывает и КTalkError
+        # (уже не несёт секрет по конструкции), и любое непредвиденное исключение,
+        # которое сюда всплывёт (см. ktalk_mcp.config.redact_secrets).
+        print(f"Ошибка: {redact_secrets(str(exc))}", file=sys.stderr)
         return 1
 
 

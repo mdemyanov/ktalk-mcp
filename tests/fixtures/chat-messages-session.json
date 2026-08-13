@@ -1,0 +1,6 @@
+{
+  "messages": [
+    {"id": "m1", "text": "Привет всем", "channelId": "general"},
+    {"id": "m2", "text": "Начинаем через 5 минут", "channelId": "general"}
+  ]
+}

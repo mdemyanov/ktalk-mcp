@@ -1,0 +1,15 @@
+{
+  "id": "REC-SYNC-001",
+  "title": "Еженедельный синк команды",
+  "participantsCount": 8,
+  "participants": [
+    {"userInfo": {"key": "u1", "surname": "Иванов", "firstname": "Пётр"}},
+    {"userInfo": {"key": "u2", "surname": "Петров", "firstname": "Анна"}},
+    {"userInfo": {"key": "u3", "surname": "Сидоров", "firstname": "Илья"}},
+    {"userInfo": {"key": "u4", "surname": "Кузнецова", "firstname": "Ольга"}},
+    {"userInfo": {"key": "u5", "surname": "Смирнов", "firstname": "Глеб"}},
+    {"userInfo": {"key": "u6", "surname": "Волкова", "firstname": "Мария"}},
+    {"anonymousName": "Гость 1", "anonymousId": "anon-1", "isAnonymous": true},
+    {"anonymousName": "Гость 2", "anonymousId": "anon-2", "isAnonymous": true}
+  ]
+}
