@@ -36,22 +36,30 @@ async def create_meeting(client: KTalkClient, body: dict) -> dict:
     `calendar_reader._fetch_segment` — сбой недокументированного пути неотличим
     от обычного auth/сетевого сбоя без контрольного вызова.
 
-    ADR-008: на `profile.mutating` (сегодня только session-режим этой операции)
-    добавляется заголовок `Authorization: Session <token>` поверх query-параметра
-    (не вместо — ADR-003 инвариант транспорта чтения не трогается). Тело ответа
-    4xx/5xx читается до классификации и прикрепляется к перехваченному исключению
-    атрибутом `response_body` (обрезано до 500 символов) — переживает прогон
-    независимо от конфигурации `logging`, которой в проекте нет."""
+    ADR-009 §6 (пересматривает ADR-008 §1): на `profile.mutating` (сегодня только
+    session-режим этой операции) заголовки `Authorization: Session <token>` +
+    `X-Platform: web` отправляются ВМЕСТО query-параметра `sessionToken`, не
+    поверх него — единственная известная рабочая конфигурация (снимок DevTools).
+    Query вырезается точечно из уже построенного `httpx.Request`
+    (`copy_remove_param`) — конструктор клиента (`client._client.params`,
+    ADR-003) не трогается, следующий read-путь того же клиента снова несёт
+    `sessionToken` в query как обычно. ГИПОТЕЗА до следующего боевого POST. Тело
+    ответа 4xx/5xx читается до классификации и прикрепляется к перехваченному
+    исключению атрибутом `response_body` (обрезано до 500 символов) — переживает
+    прогон независимо от конфигурации `logging`, которой в проекте нет."""
     profile = client._profile_for("create_meeting")  # noqa: SLF001
     headers = (
-        {"Authorization": f"Session {client._auth.credential}"}  # noqa: SLF001
+        {"Authorization": f"Session {client._auth.credential}", "X-Platform": "web"}  # noqa: SLF001
         if profile.mutating
         else None
     )
+    request = client._client.build_request(  # noqa: SLF001
+        "POST", profile.path_template, json=body, headers=headers
+    )
+    if profile.mutating:
+        request.url = request.url.copy_remove_param("sessionToken")
     try:
-        response = await client._client.post(  # noqa: SLF001
-            profile.path_template, json=body, headers=headers
-        )
+        response = await client._client.send(request)  # noqa: SLF001
     except TRANSIENT_ERRORS as exc:
         await diagnose_undocumented_failure(client, "create_meeting", exc)
         raise  # недостижимо

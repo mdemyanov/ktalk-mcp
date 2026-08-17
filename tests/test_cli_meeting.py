@@ -1,9 +1,11 @@
 """AT-design: FR-13 CLI — `create-meeting-preview`/`create-meeting-confirm`
 (`ktalk_mcp.cli_meeting`, расширение `ktalk_mcp.cli`).
 
-Покрывает: булевы флаги НЕ `store_true` (отсутствие `--enable-sip` != `False`),
-явная пустая коллекция участников (`--no-required-users` != отсутствие флага),
-`_tri_bool` (`TRUE`/`False` принимаются, `yes`/`1` отклоняются), `isatty()`-барьер
+Покрывает: булевы флаги НЕ `store_true` (отсутствие `--allow-anonymous` != `False`),
+явная пустая коллекция участников (`--no-required-attendees` != отсутствие флага,
+ADR-009 §5), явное «без PIN» (`--no-pin-code`, ADR-009 §2), условная обязательность
+`--anonymous-access-expiration` (ADR-009 §3), `_tri_bool` (`TRUE`/`False`
+принимаются, `yes`/`1` отклоняются), `isatty()`-барьер
 (под pytest stdin/stdout уже не терминал — негативный случай получаем бесплатно;
 позитивный — реальный `pty`), отсутствие авто-retry на сетевую ошибку на CLI-уровне,
 работа обеих подкоманд при недоступном пути реестра (FR-19-совместимость, детальный
@@ -41,13 +43,11 @@ _PREVIEW_ARGV_FULL = [
     "Europe/Moscow",
     "--room-name",
     "test-room-alpha",
-    "--required-user-key",
-    "synthetic-user-1",
-    "--required-user-key",
-    "synthetic-user-2",
+    "--required-attendee-key",
+    "1001",
+    "--required-attendee-key",
+    "1002",
     "--enable-auto-recording",
-    "true",
-    "--enable-sip",
     "true",
     "--pin-code",
     "1234",
@@ -168,13 +168,13 @@ def test_cli_create_meeting_preview_missing_room_name_names_the_field(
     assert "roomName" in captured.out + captured.err
 
 
-def test_cli_create_meeting_preview_missing_enable_sip_flag_is_not_silently_false(
+def test_cli_create_meeting_preview_missing_pin_code_signal_is_not_silently_none(
     httpx_mock: HTTPXMock, monkeypatch, capsys
 ):
-    """NFR-9: отсутствие `--enable-sip` не эквивалентно `False` — CLI отказывает,
-    называя `enableSip`, а не молча создаёт тело с `enableSip: false`."""
+    """ADR-009 §2: ни `--pin-code`, ни `--no-pin-code` -> `pinCode` не решён — CLI
+    отказывает, называя `pinCode`, а не молча создаёт тело с `pinCode: null`."""
     argv = list(_PREVIEW_ARGV_FULL)
-    idx = argv.index("--enable-sip")
+    idx = argv.index("--pin-code")
     del argv[idx : idx + 2]
 
     rc = _run(argv, monkeypatch)
@@ -182,19 +182,18 @@ def test_cli_create_meeting_preview_missing_enable_sip_flag_is_not_silently_fals
     assert rc != 0
     assert httpx_mock.get_requests() == []
     captured = capsys.readouterr()
-    assert "enableSip" in captured.out + captured.err
+    assert "pinCode" in captured.out + captured.err
 
 
-def test_cli_create_meeting_preview_no_required_users_flag_gives_explicit_empty_list(
+def test_cli_create_meeting_preview_no_pin_code_flag_gives_explicit_null(
     httpx_mock: HTTPXMock, monkeypatch, capsys
 ):
-    """`--no-required-users` без `--required-user-key` -> явное «ноль участников»,
-    предпросмотр проходит (не отклоняется как «не решено»)."""
+    """ADR-009 §2: `--no-pin-code` без `--pin-code` -> явное «без PIN» — предпросмотр
+    проходит (не отклоняется как «не решено»)."""
     argv = list(_PREVIEW_ARGV_FULL)
-    while "--required-user-key" in argv:
-        idx = argv.index("--required-user-key")
-        del argv[idx : idx + 2]
-    argv.append("--no-required-users")
+    idx = argv.index("--pin-code")
+    del argv[idx : idx + 2]
+    argv.append("--no-pin-code")
 
     rc = _run(argv, monkeypatch)
 
@@ -202,14 +201,31 @@ def test_cli_create_meeting_preview_no_required_users_flag_gives_explicit_empty_
     assert httpx_mock.get_requests() == []
 
 
-def test_cli_create_meeting_preview_neither_required_user_key_nor_no_required_users_rejects(
+def test_cli_create_meeting_preview_no_required_attendees_flag_gives_explicit_empty_list(
     httpx_mock: HTTPXMock, monkeypatch, capsys
 ):
-    """Ни `--required-user-key`, ни `--no-required-users` не переданы -> `None` ->
-    `MissingFieldError("requiredUserKeys")` (rooms-calendar-spec «Контракт с QA-author»)."""
+    """`--no-required-attendees` без `--required-attendee-key` -> явное «ноль
+    участников», предпросмотр проходит (не отклоняется как «не решено»)."""
     argv = list(_PREVIEW_ARGV_FULL)
-    while "--required-user-key" in argv:
-        idx = argv.index("--required-user-key")
+    while "--required-attendee-key" in argv:
+        idx = argv.index("--required-attendee-key")
+        del argv[idx : idx + 2]
+    argv.append("--no-required-attendees")
+
+    rc = _run(argv, monkeypatch)
+
+    assert rc == 0
+    assert httpx_mock.get_requests() == []
+
+
+def test_cli_create_meeting_preview_neither_required_attendee_key_nor_no_flag_rejects(
+    httpx_mock: HTTPXMock, monkeypatch, capsys
+):
+    """Ни `--required-attendee-key`, ни `--no-required-attendees` не переданы ->
+    `None` -> `MissingFieldError("requiredAttendees")` (ADR-009 §1)."""
+    argv = list(_PREVIEW_ARGV_FULL)
+    while "--required-attendee-key" in argv:
+        idx = argv.index("--required-attendee-key")
         del argv[idx : idx + 2]
 
     rc = _run(argv, monkeypatch)
@@ -217,7 +233,38 @@ def test_cli_create_meeting_preview_neither_required_user_key_nor_no_required_us
     assert rc != 0
     assert httpx_mock.get_requests() == []
     captured = capsys.readouterr()
-    assert "requiredUserKeys" in captured.out + captured.err
+    assert "requiredAttendees" in captured.out + captured.err
+
+
+def test_cli_create_meeting_preview_allow_anonymous_true_without_expiration_rejects(
+    httpx_mock: HTTPXMock, monkeypatch, capsys
+):
+    """ADR-009 §3: `--allow-anonymous true` без `--anonymous-access-expiration` ->
+    отказ, называющий `anonymousAccessExpirationDate` (нет вычисляемого дефолта)."""
+    argv = list(_PREVIEW_ARGV_FULL)
+    idx = argv.index("--allow-anonymous")
+    argv[idx + 1] = "true"
+
+    rc = _run(argv, monkeypatch)
+
+    assert rc != 0
+    assert httpx_mock.get_requests() == []
+    captured = capsys.readouterr()
+    assert "anonymousAccessExpirationDate" in captured.out + captured.err
+
+
+def test_cli_create_meeting_preview_allow_anonymous_true_with_expiration_succeeds(
+    httpx_mock: HTTPXMock, monkeypatch, capsys
+):
+    argv = list(_PREVIEW_ARGV_FULL)
+    idx = argv.index("--allow-anonymous")
+    argv[idx + 1] = "true"
+    argv += ["--anonymous-access-expiration", "2026-08-18T20:59:59.999Z"]
+
+    rc = _run(argv, monkeypatch)
+
+    assert rc == 0
+    assert httpx_mock.get_requests() == []
 
 
 # --- isatty()-барьер -----------------------------------------------------------------------

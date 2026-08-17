@@ -469,12 +469,12 @@ _MEETING_PREVIEW_FIELDS = (
     ("end", "Конец"),
     ("timezone", "Часовой пояс"),
     ("roomName", "Комната"),
-    ("requiredUserKeys", "Обязательные участники"),
+    ("requiredAttendees", "Обязательные участники"),
     ("description", "Описание"),
     ("enableAutoRecording", "Автозапись"),
-    ("enableSip", "SIP"),
     ("pinCode", "PIN-код"),
     ("allowAnonymous", "Анонимный доступ"),
+    ("anonymousAccessExpirationDate", "Истечение анонимного доступа"),
 )
 
 

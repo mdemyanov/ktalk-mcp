@@ -27,12 +27,13 @@ def register(mcp: FastMCP) -> None:
         end: str | None = None,
         timezone: str | None = None,
         room_name: str | None = None,
-        required_user_keys: list[str] | None = None,
+        required_attendee_keys: list[str] | None = None,
         description: str | None = None,
         enable_auto_recording: bool | None = None,
-        enable_sip: bool | None = None,
         pin_code: str | None = None,
+        pin_code_explicit_none: bool = False,
         allow_anonymous: bool | None = None,
+        anonymous_access_expiration: str | None = None,
         format: str = "markdown",
     ) -> str:
         """Preview a single meeting to be created (FR-13) — zero network calls.
@@ -46,16 +47,22 @@ def register(mcp: FastMCP) -> None:
 
         Args:
             subject: Meeting subject (required)
-            start: Start time (ISO 8601, required)
-            end: End time (ISO 8601, required)
+            start: Local ISO 8601 start time with offset (required) — converted
+                to UTC internally (ADR-009)
+            end: Local ISO 8601 end time with offset (required) — converted to
+                UTC internally (ADR-009)
             timezone: Timezone (required — no silent default, NFR-9)
             room_name: Room name (required)
-            required_user_keys: Required attendee keys; explicit empty list is valid
+            required_attendee_keys: Numeric attendee ids as strings (not logins,
+                ADR-009); explicit empty list is valid
             description: Optional description (only field with a silent default)
             enable_auto_recording: Whether the meeting is recorded (required, no silent default)
-            enable_sip: Whether SIP dial-in is enabled (required, no silent default)
-            pin_code: Room PIN code; explicit empty string is valid ("no PIN")
+            pin_code: Room PIN code
+            pin_code_explicit_none: True means "explicitly no PIN" (JSON null);
+                without either signal, pin_code is required
             allow_anonymous: Whether unauthenticated participants may join (required)
+            anonymous_access_expiration: Required only if allow_anonymous is True
+                (ADR-009 §3 — no computed default)
             format: Output format — "raw" (JSON) or "markdown"
         """
         try:
@@ -66,12 +73,13 @@ def register(mcp: FastMCP) -> None:
                 end=end,
                 timezone=timezone,
                 room_name=room_name,
-                required_user_keys=required_user_keys,
+                required_attendee_keys=required_attendee_keys,
                 description=description,
                 enable_auto_recording=enable_auto_recording,
-                enable_sip=enable_sip,
                 pin_code=pin_code,
+                pin_code_explicit_none=pin_code_explicit_none,
                 allow_anonymous=allow_anonymous,
+                anonymous_access_expiration=anonymous_access_expiration,
             )
             data = {"body": body, "confirmation_id": confirmation_id}
             return render_tool_output(data, format, format_meeting_preview)

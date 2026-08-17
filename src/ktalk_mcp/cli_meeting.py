@@ -43,17 +43,32 @@ def _add_meeting_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--end", default=None)
     parser.add_argument("--timezone", default=None)
     parser.add_argument("--room-name", default=None)
-    parser.add_argument("--required-user-key", action="append", default=None)
+    # ADR-009 §5: `--required-user-key` (логин) переименован в `--required-attendee-key`
+    # (числовой id) — резолюция логина в id не реализуется этим ADR, оператор
+    # передаёт значение явно (см. Бриф для Dev spec §5).
+    parser.add_argument("--required-attendee-key", action="append", default=None)
     parser.add_argument(
-        "--no-required-users",
+        "--no-required-attendees",
         action="store_true",
         help="Явное «без обязательных участников» (не то же самое, что отсутствие флага)",
     )
     parser.add_argument("--description", default=None)
     parser.add_argument("--enable-auto-recording", type=_tri_bool, default=None)
-    parser.add_argument("--enable-sip", type=_tri_bool, default=None)
     parser.add_argument("--pin-code", default=None)
+    parser.add_argument(
+        "--no-pin-code",
+        action="store_true",
+        help='Явное «без PIN» (JSON null) — не то же самое, что отсутствие флага (ADR-009 §2)',
+    )
     parser.add_argument("--allow-anonymous", type=_tri_bool, default=None)
+    parser.add_argument(
+        "--anonymous-access-expiration",
+        default=None,
+        help=(
+            "Обязателен, если --allow-anonymous true (ADR-009 §3 — нет вычисляемого "
+            "дефолта, значение указывается явно)"
+        ),
+    )
 
 
 def register_subparsers(sub) -> None:
@@ -61,12 +76,12 @@ def register_subparsers(sub) -> None:
     _add_meeting_args(sub.add_parser("create-meeting-confirm", help="Создать встречу (только TTY)"))
 
 
-def _required_user_keys(args: argparse.Namespace) -> list[str] | None:
-    """`--no-required-users` побеждает при одновременной передаче обоих флагов —
-    порядок не специфицирован спекой, зафиксирован здесь и тестом."""
-    if args.no_required_users:
+def _required_attendee_keys(args: argparse.Namespace) -> list[str] | None:
+    """`--no-required-attendees` побеждает при одновременной передаче обоих
+    флагов — порядок не специфицирован спекой, зафиксирован здесь и тестом."""
+    if args.no_required_attendees:
         return []
-    return args.required_user_key
+    return args.required_attendee_key
 
 
 def _meeting_kwargs(args: argparse.Namespace) -> dict:
@@ -76,12 +91,13 @@ def _meeting_kwargs(args: argparse.Namespace) -> dict:
         "end": args.end,
         "timezone": args.timezone,
         "room_name": args.room_name,
-        "required_user_keys": _required_user_keys(args),
+        "required_attendee_keys": _required_attendee_keys(args),
         "description": args.description,
         "enable_auto_recording": args.enable_auto_recording,
-        "enable_sip": args.enable_sip,
         "pin_code": args.pin_code,
+        "pin_code_explicit_none": args.no_pin_code,
         "allow_anonymous": args.allow_anonymous,
+        "anonymous_access_expiration": args.anonymous_access_expiration,
     }
 
 

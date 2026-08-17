@@ -25,10 +25,9 @@ FULL_KWARGS = {
     "end": "2026-08-15T11:00:00+03:00",
     "timezone": "Europe/Moscow",
     "room_name": "test-room-alpha",
-    "required_user_keys": ["synthetic-user-1", "synthetic-user-2"],
+    "required_attendee_keys": ["1001", "1002"],
     "description": "Синтетическое описание",
     "enable_auto_recording": True,
-    "enable_sip": True,
     "pin_code": "1234",
     "allow_anonymous": False,
 }
@@ -211,14 +210,16 @@ async def test_create_meeting_logs_4xx_body_without_changing_user_message(
     assert "устройство роутинга: путь не смаршрутизирован" in caplog.text
 
 
-# --- ADR-008: заголовок Authorization на мутирующей операции session-режима ------------
+# --- ADR-009 §6: заголовки вместо query на мутирующей операции session-режима ----------
 
 
-async def test_adr008_create_meeting_sends_authorization_header_additively(
+async def test_adr009_create_meeting_sends_headers_without_session_token_in_query(
     httpx_mock: HTTPXMock, base_url, session_token
 ):
-    """ADR-008 §1: `mutating=True` -> заголовок `Authorization: Session <token>`
-    отправляется ДОПОЛНИТЕЛЬНО к query-параметру `sessionToken`, не вместо него."""
+    """ADR-009 §6 (пересматривает ADR-008 §1): `mutating=True` -> заголовки
+    `Authorization: Session <token>` + `X-Platform: web` отправляются ВМЕСТО
+    query-параметра `sessionToken` — единственная известная рабочая
+    конфигурация (снимок DevTools)."""
     from ktalk_mcp.client import KTalkClient
     from ktalk_mcp.meeting_scheduling import create_meeting
 
@@ -229,7 +230,61 @@ async def test_adr008_create_meeting_sends_authorization_header_additively(
 
     request = httpx_mock.get_request()
     assert request.headers.get("Authorization") == f"Session {session_token}"
-    assert request.url.params.get("sessionToken") == session_token
+    assert request.headers.get("X-Platform") == "web"
+    assert "sessionToken" not in request.url.params
+    assert session_token not in request.url.query.decode()
+
+
+async def test_adr009_read_paths_of_same_client_keep_session_token_in_query_after_create_meeting(
+    httpx_mock: HTTPXMock, base_url, session_token
+):
+    """ADR-009 §6 / регресс ADR-003: `copy_remove_param` над `httpx.Request` не
+    трогает `client._client.params` — read-путь того же клиента после
+    `create_meeting` по-прежнему несёт `sessionToken` в query."""
+    from ktalk_mcp.client import KTalkClient
+    from ktalk_mcp.meeting_scheduling import create_meeting
+
+    httpx_mock.add_response(status_code=200, json={"id": "MEET-0001"})
+    httpx_mock.add_response(status_code=200, json={"recordings": []})
+
+    async with KTalkClient(base_url=base_url, session_token=session_token) as client:
+        await create_meeting(client, {"subject": "X"})
+        await client.list_recordings(top=1)
+
+    requests = httpx_mock.get_requests()
+    assert requests[0].url.path == "/api/calendar"
+    assert "sessionToken" not in requests[0].url.params
+
+    assert requests[1].url.path == "/api/recordings"
+    assert requests[1].url.params.get("sessionToken") == session_token
+
+
+async def test_adr009_401_error_message_does_not_leak_session_token(
+    httpx_mock: HTTPXMock, base_url, session_token
+):
+    """NFR-10: токен не попадает в текст исключения ни в одной ветке — заголовок
+    `Authorization` несёт токен транспортно, но не должен всплывать в сообщении
+    об ошибке, которое доходит до вывода CLI/MCP."""
+    from ktalk_mcp.client import KTalkClient, KTalkWriteAuthMismatchError
+    from ktalk_mcp.meeting_scheduling import create_meeting
+
+    httpx_mock.add_response(
+        status_code=401,
+        text="токен невалиден для этого пути",
+        url=re.compile(rf"^{re.escape(base_url)}/api/calendar(\?.*)?$"),
+    )
+    httpx_mock.add_response(
+        status_code=200,
+        json={"recordings": []},
+        url=re.compile(rf"^{re.escape(base_url)}/api/recordings(\?.*)?$"),
+    )
+
+    async with KTalkClient(base_url=base_url, session_token=session_token) as client:
+        with pytest.raises(KTalkWriteAuthMismatchError) as exc_info:
+            await create_meeting(client, {"subject": "X"})
+
+    assert session_token not in str(exc_info.value)
+    assert session_token not in (exc_info.value.response_body or "")
 
 
 async def test_adr008_401_with_working_control_raises_write_auth_mismatch_not_contour_drift(
