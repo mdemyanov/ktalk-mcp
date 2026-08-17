@@ -427,6 +427,74 @@ def format_chat_messages(data: dict | list) -> str:
     return "\n".join(lines)
 
 
+def format_room(data: dict) -> str:
+    """Format `ktalk_get_room` result (FR-17) to markdown — generic по `ROOM_FIELDS`."""
+    from ktalk_mcp.rooms import ROOM_FIELDS
+
+    lines = [f"# Комната: {data.get('roomName', 'N/A')}", ""]
+    for field in ROOM_FIELDS:
+        if field == "roomName":
+            continue
+        value = data.get(field)
+        if isinstance(value, (dict, list)):
+            value = json.dumps(value, ensure_ascii=False)
+        lines.append(f"- **{field}:** {value}")
+    return "\n".join(lines)
+
+
+def format_calendar(data: dict) -> str:
+    """Format `ktalk_list_calendar` result (FR-18) to markdown. Заголовок нейтрален
+    (AC-7): "видимые активной авторизации", не «ваш календарь»."""
+    items = data.get("items") or []
+    incomplete = data.get("incomplete_segments") or []
+    lines = [f"# Запланированные встречи, видимые активной авторизации ({len(items)})", ""]
+    if incomplete:
+        lines.append(
+            f"> Внимание: {len(incomplete)} сегмент(ов) окна вернули потолок в 100 "
+            "элементов — выдача может быть неполной."
+        )
+        lines.append("")
+    lines.append("| Тема | Комната | Начало | Конец |")
+    lines.append("|---|---|---|---|")
+    for item in items:
+        lines.append(
+            f"| {item.get('subject', '')} | {item.get('roomName', '')} | "
+            f"{_format_datetime(item.get('start'))} | {_format_datetime(item.get('end'))} |"
+        )
+    return "\n".join(lines)
+
+
+_MEETING_PREVIEW_FIELDS = (
+    ("start", "Начало"),
+    ("end", "Конец"),
+    ("timezone", "Часовой пояс"),
+    ("roomName", "Комната"),
+    ("requiredUserKeys", "Обязательные участники"),
+    ("description", "Описание"),
+    ("enableAutoRecording", "Автозапись"),
+    ("enableSip", "SIP"),
+    ("pinCode", "PIN-код"),
+    ("allowAnonymous", "Анонимный доступ"),
+)
+
+
+def format_meeting_preview(data: dict) -> str:
+    """Format `ktalk_preview_meeting`/`create-meeting-preview`/`create-meeting-confirm`
+    result (FR-13) to markdown. `confirmation_id` явно помечен справочным (ADR-005
+    §6.3) — нет машинной связки между MCP-предпросмотром и CLI-подтверждением.
+
+    Намеренно компактно: `create-meeting-confirm` печатает это же в реальный TTY
+    без чтения с другой стороны в тестах (ADR-005-spec «не мокируется как чистая
+    функция») — обильный текст рискует упереться в размер буфера терминала.
+    """
+    body = data.get("body") or {}
+    lines = [f"# Встреча: {body.get('subject', '')} (ещё не создана)", ""]
+    for field, label in _MEETING_PREVIEW_FIELDS:
+        lines.append(f"- {label}: {body.get(field)}")
+    lines.append(f"- confirmation_id (справочно, не межпроцессный): {data.get('confirmation_id')}")
+    return "\n".join(lines)
+
+
 def format_auth_status(data: dict) -> str:
     """Format `ktalk_auth_status`/`ktalk auth-status` result (FR-11) to markdown."""
     lines = [

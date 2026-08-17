@@ -9,6 +9,8 @@ from ktalk_mcp.config import KTalkConfigError
 from ktalk_mcp.formatters import format_auth_status, render_tool_output
 from ktalk_mcp.tools_meetings import register as register_meetings_tools
 from ktalk_mcp.tools_recordings import register as register_recordings_tools
+from ktalk_mcp.tools_rooms import register as register_rooms_tools
+from ktalk_mcp.tools_scheduling import register as register_scheduling_tools
 
 mcp = FastMCP(
     "KTalk",
@@ -19,6 +21,8 @@ _AUTH_ERRORS = (KTalkError, KTalkConfigError)
 
 register_recordings_tools(mcp)
 register_meetings_tools(mcp)
+register_rooms_tools(mcp)
+register_scheduling_tools(mcp)
 
 
 @mcp.tool()

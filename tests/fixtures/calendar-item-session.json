@@ -1,0 +1,22 @@
+{
+  "busyType": "busy",
+  "calendarSource": "internal",
+  "description": "Синтетическая тестовая встреча",
+  "end": "2026-08-15T11:00:00+03:00",
+  "id": "EVT-0001",
+  "isRecurring": false,
+  "location": "test-room-alpha",
+  "locationAttendee": "test-room-alpha",
+  "meetId": "MEET-0001",
+  "onlineMeetingUrl": "https://test.ktalk.ru/j/MEET-0001",
+  "onlineUsers": 0,
+  "optionalAttendees": [],
+  "organizer": {"key": "synthetic-user-1", "name": "Тестов Тест"},
+  "requiredAttendees": [{"key": "synthetic-user-2", "name": "Синтетов Син"}],
+  "room": {"roomName": "test-room-alpha"},
+  "roomName": "test-room-alpha",
+  "start": "2026-08-15T10:00:00+03:00",
+  "stream": null,
+  "subject": "Синтетическая встреча",
+  "urlParams": "?token=synthetic"
+}

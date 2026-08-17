@@ -31,6 +31,9 @@ OPERATION_LABELS = {
     "list_archive": "архив",
     "get_participants_full": "полный состав участников",
     "get_participants_report": "отчёт по участникам встречи",
+    "get_room": "чтение комнаты",
+    "get_calendar": "чтение календаря",
+    "create_meeting": "создание встречи",
 }
 
 
@@ -107,6 +110,31 @@ OPERATION_PROFILES: dict[str, dict[AuthMode, EndpointProfile | None]] = {
         AuthMode.API_KEY: EndpointProfile(
             "/api/ConferenceReports/{key}/participants", "application.reporting.read"
         ),
+    },
+    "get_room": {
+        # FR-17: внутренний путь, вне спеки, регистронезависим (постановка §5, живой GET).
+        AuthMode.SESSION: EndpointProfile("/api/rooms/{room_name}", None),
+        # ADR-004, таблица «Подтверждённость»: api-key не проверен вовсе — fail-closed (FR-17 AC3).
+        AuthMode.API_KEY: None,
+    },
+    "get_calendar": {
+        # FR-18: внутренний путь, вне спеки, подтверждён исчерпывающе под session
+        # (Ф-17–Ф-31 RES-003).
+        AuthMode.SESSION: EndpointProfile("/api/calendar", None),
+        # ADR-004 п.2: 200 наблюдался под api-key (Ф-34), но необъяснимо (расходится с Ф-33/Ф-35
+        # тем же ключом) — не "рабочая" запись несмотря на живой позитивный результат.
+        # Ревизуемо отдельной задачей при появлении объяснения, не тихой правкой этой строки.
+        AuthMode.API_KEY: None,
+    },
+    "create_meeting": {
+        # FR-13 §6.6: путь БЕЗ префикса `/api` (mainpart, Ф-38) — намеренно
+        # отличается от get_room/get_calendar, не опечатка. Ни один режим не
+        # проверен живым POST (красная линия разведки, RES-003 §3); session
+        # держится в профиле по тому же принципу, что get_calendar (Ф-34) — он
+        # разделяет транспорт и авторизацию с уже подтверждённым GET /api/calendar
+        # той же внутренней подсистемы, api-key не проверен вовсе -> fail-closed.
+        AuthMode.SESSION: EndpointProfile("/calendar", None),
+        AuthMode.API_KEY: None,
     },
 }
 

@@ -1,0 +1,62 @@
+flowchart TB
+    subgraph mcp["MCP-инструменты"]
+        toolsRooms["tools_rooms.py<br/>ktalk_get_room"]
+        toolsMeetings["tools_meetings.py<br/>ktalk_list_calendar<br/>(+ ktalk_list_archive,<br/>ktalk_get_chat_messages)"]
+        toolsScheduling["tools_scheduling.py<br/>ktalk_preview_meeting"]
+    end
+
+    subgraph cli["CLI"]
+        cliMain["cli.py<br/>main/dispatch"]
+        cliMeeting["cli_meeting.py<br/>create-meeting-preview<br/>create-meeting-confirm"]
+    end
+
+    cliMain --> cliMeeting
+
+    subgraph domain["Чтение/запись контура (новое)"]
+        rooms["rooms.py<br/>get_room, map_room"]
+        calendarReader["calendar_reader.py<br/>get_calendar_window,<br/>split_window,<br/>map_calendar_item"]
+        meetingBody["meeting_body.py<br/>build_meeting_body,<br/>canonical_body_hash"]
+        confirmation["confirmation.py<br/>ConfirmationStore"]
+        meetingScheduling["meeting_scheduling.py<br/>PreviewService,<br/>create_meeting"]
+    end
+
+    subgraph shared["Общая опора"]
+        contourDiag["contour_diagnostics.py<br/>ContourDriftError,<br/>diagnose_undocumented_failure"]
+        clientPy["client.py<br/>KTalkClient<br/>(frozen, 0 новых строк)"]
+        authPy["auth.py<br/>OPERATION_PROFILES,<br/>EndpointProfile,<br/>quote_path_param"]
+    end
+
+    formatters["formatters.py<br/>format_room, format_calendar,<br/>format_meeting_preview"]
+
+    toolsRooms --> rooms
+    toolsMeetings --> calendarReader
+    toolsScheduling --> meetingScheduling
+    toolsScheduling --> confirmation
+    cliMeeting --> meetingScheduling
+    cliMeeting --> confirmation
+    cliMeeting --> meetingBody
+
+    meetingScheduling --> meetingBody
+    meetingScheduling --> confirmation
+
+    rooms --> contourDiag
+    calendarReader --> contourDiag
+    contourDiag --> clientPy
+
+    rooms --> clientPy
+    calendarReader --> clientPy
+    meetingScheduling --> clientPy
+    cliMeeting --> clientPy
+
+    rooms --> authPy
+    clientPy --> authPy
+
+    toolsRooms --> formatters
+    toolsMeetings --> formatters
+    toolsScheduling --> formatters
+    cliMeeting --> formatters
+
+    style clientPy fill:#ffe3e3,stroke:#c92a2a,stroke-width:3px
+    style authPy fill:#e7f5ff,stroke:#1971c2,stroke-width:2px
+    style contourDiag fill:#e5dbff,stroke:#5f3dc4,stroke-width:2px
+    style formatters fill:#c5f6fa,stroke:#0c8599,stroke-width:2px

@@ -144,7 +144,7 @@ def cmd_sync(reg: Registry, args) -> int:
 
 
 def cmd_auth_status(reg: Registry, args) -> int:
-    del reg  # не механика реестра, но проходит общий диспетчер main() для единообразия
+    del reg  # реестр для этой команды больше не открывается вовсе, FR-19 — reg всегда None
     try:
         status = asyncio.run(_fetch_auth_status())
     except _AUTH_ERRORS as exc:
