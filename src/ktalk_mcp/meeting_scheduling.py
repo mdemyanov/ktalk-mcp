@@ -6,9 +6,14 @@
 
 from __future__ import annotations
 
+import logging
+
 from ktalk_mcp.client import KTalkClient
 from ktalk_mcp.confirmation import ConfirmationStore
+from ktalk_mcp.contour_diagnostics import TRANSIENT_ERRORS, diagnose_undocumented_failure
 from ktalk_mcp.meeting_body import build_meeting_body, canonical_body_hash
+
+logger = logging.getLogger(__name__)
 
 
 class PreviewService:
@@ -26,8 +31,25 @@ class PreviewService:
 
 
 async def create_meeting(client: KTalkClient, body: dict) -> dict:
-    """Ровно одна сетевая попытка `POST /calendar` (без `/api`), без retry."""
+    """Ровно одна сетевая попытка `POST /api/calendar`, без retry. ADR-007 п.3:
+    оборачивается корреляционной диагностикой ADR-004, тем же приёмом, что
+    `calendar_reader._fetch_segment` — сбой недокументированного пути неотличим
+    от обычного auth/сетевого сбоя без контрольного вызова."""
     profile = client._profile_for("create_meeting")  # noqa: SLF001
-    response = await client._client.post(profile.path_template, json=body)  # noqa: SLF001
-    client._classify(response, profile.required_scope)  # noqa: SLF001
+    try:
+        response = await client._client.post(profile.path_template, json=body)  # noqa: SLF001
+    except TRANSIENT_ERRORS as exc:
+        await diagnose_undocumented_failure(client, "create_meeting", exc)
+        raise  # недостижимо
+
+    if response.status_code >= 400:
+        logger.warning(
+            "create_meeting: HTTP %s, тело: %s", response.status_code, response.text
+        )
+
+    try:
+        client._classify(response, profile.required_scope)  # noqa: SLF001
+    except TRANSIENT_ERRORS as exc:
+        await diagnose_undocumented_failure(client, "create_meeting", exc)
+        raise  # недостижимо
     return response.json()

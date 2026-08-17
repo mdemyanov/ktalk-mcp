@@ -127,13 +127,13 @@ OPERATION_PROFILES: dict[str, dict[AuthMode, EndpointProfile | None]] = {
         AuthMode.API_KEY: None,
     },
     "create_meeting": {
-        # FR-13 §6.6: путь БЕЗ префикса `/api` (mainpart, Ф-38) — намеренно
-        # отличается от get_room/get_calendar, не опечатка. Ни один режим не
-        # проверен живым POST (красная линия разведки, RES-003 §3); session
-        # держится в профиле по тому же принципу, что get_calendar (Ф-34) — он
-        # разделяет транспорт и авторизацию с уже подтверждённым GET /api/calendar
-        # той же внутренней подсистемы, api-key не проверен вовсе -> fail-closed.
-        AuthMode.SESSION: EndpointProfile("/calendar", None),
+        # ГИПОТЕЗА (mainpart-ktalk-mcp.md:192-193, RES-003 Ф-38, не проверено живым POST):
+        # путь с префиксом /api — mainpart документирует base_url = f"{space_url}/api" и
+        # использует /calendar относительно него; предыдущая запись без /api была ошибкой
+        # прочтения этого источника (ADR-007), не проверенным решением. Следующий боевой
+        # POST под новой санкцией владельца — единственная проверка.
+        AuthMode.SESSION: EndpointProfile("/api/calendar", None),
+        # ФАКТ (ADR-004 п.2): api-key не проверен вовсе -> fail-closed.
         AuthMode.API_KEY: None,
     },
 }

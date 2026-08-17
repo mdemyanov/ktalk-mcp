@@ -240,11 +240,14 @@ def test_cli_create_meeting_confirm_over_real_tty_creates_exactly_once(
 def test_cli_create_meeting_confirm_network_failure_no_retry_exactly_one_attempt(
     httpx_mock: HTTPXMock, monkeypatch
 ):
-    """AC FR-13/6 на CLI-уровне: сетевая ошибка при `POST /calendar` -> ровно одна
-    попытка, сообщение о неопределённом исходе, не автоматический повтор."""
+    """AC FR-13/6 на CLI-уровне: сетевая ошибка при `POST /api/calendar` -> ровно
+    одна попытка самой записи, сообщение о неопределённом исходе, не автоматический
+    повтор. ADR-007 п.3 добавляет один контрольный GET (диагностика ADR-004), тоже
+    проваливается -> исходное сообщение о сетевой ошибке не меняется."""
     import httpx as httpx_module
 
     master_fd, slave_fd = _with_real_pty(monkeypatch, "да")
+    httpx_mock.add_exception(httpx_module.ConnectError("connection refused"))
     httpx_mock.add_exception(httpx_module.ConnectError("connection refused"))
 
     try:
@@ -254,4 +257,7 @@ def test_cli_create_meeting_confirm_network_failure_no_retry_exactly_one_attempt
         os.close(slave_fd)
 
     assert rc != 0
-    assert len(httpx_mock.get_requests()) == 1
+    requests = httpx_mock.get_requests()
+    assert len(requests) == 2
+    assert requests[0].method == "POST"
+    assert requests[1].method == "GET"

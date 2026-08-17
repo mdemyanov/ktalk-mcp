@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import inspect
+import re
 
 import httpx
 import pytest
@@ -104,11 +105,12 @@ async def test_ac_fr13_2_preview_body_matches_body_sent_at_create(
     assert sent_body == body
 
 
-async def test_create_meeting_posts_to_calendar_path_without_api_prefix(
+async def test_create_meeting_posts_to_api_calendar_path(
     httpx_mock: HTTPXMock, base_url, session_token
 ):
-    """Путь БЕЗ префикса `/api` (mainpart, Ф-38) — отличается от `get_room`/
-    `get_calendar` намеренно, не опечатка."""
+    """ADR-007: путь с префиксом `/api` — согласован с `get_room`/`get_calendar`,
+    прежняя запись без `/api` была ошибкой прочтения источника (mainpart), не
+    намеренным решением."""
     from ktalk_mcp.client import KTalkClient
     from ktalk_mcp.meeting_scheduling import create_meeting
 
@@ -118,7 +120,7 @@ async def test_create_meeting_posts_to_calendar_path_without_api_prefix(
         await create_meeting(client, {"subject": "X"})
 
     request = httpx_mock.get_request()
-    assert request.url.path == "/calendar"
+    assert request.url.path == "/api/calendar"
 
 
 # --- AC-6: нет авто-retry на сетевую ошибку ---------------------------------------------
@@ -128,17 +130,85 @@ async def test_ac_fr13_6_network_failure_does_not_trigger_automatic_retry(
     httpx_mock: HTTPXMock, base_url, session_token
 ):
     """AC FR-13/6: сетевая ошибка/таймаут при создании -> инструмент не повторяет
-    запрос автоматически — ровно один фактически выполненный сетевой вызов на запись."""
+    сам POST автоматически — ровно один фактический вызов на запись. ADR-007 п.3
+    добавляет один контрольный GET (диагностика), тоже проваливается -> исходная
+    сетевая ошибка, не `ContourDriftError` (edge case контракта QA-author)."""
     from ktalk_mcp.client import KTalkClient
     from ktalk_mcp.meeting_scheduling import create_meeting
 
-    httpx_mock.add_exception(httpx.ConnectError("connection refused"))
+    httpx_mock.add_exception(
+        httpx.ConnectError("connection refused"),
+        url=re.compile(rf"^{re.escape(base_url)}/api/calendar(\?.*)?$"),
+    )
+    httpx_mock.add_exception(
+        httpx.ConnectError("connection refused"),
+        url=re.compile(rf"^{re.escape(base_url)}/api/recordings(\?.*)?$"),
+    )
 
     async with KTalkClient(base_url=base_url, session_token=session_token) as client:
-        with pytest.raises(Exception):  # noqa: B017 - конкретный класс решает Dev
+        with pytest.raises(httpx.ConnectError):
             await create_meeting(client, {"subject": "X"})
 
-    assert len(httpx_mock.get_requests()) == 1
+    requests = httpx_mock.get_requests()
+    assert len(requests) == 2
+    assert requests[0].url.path == "/api/calendar"
+    assert requests[1].url.path == "/api/recordings"
+
+
+async def test_create_meeting_404_with_working_control_raises_contour_drift_error(
+    httpx_mock: HTTPXMock, base_url, session_token
+):
+    """Edge case контракта QA-author: POST /api/calendar -> 404, контроль
+    list_recordings(top=1) -> 200 -> `ContourDriftError`, не `KTalkNotFoundError`
+    (ADR-007 п.3)."""
+    from ktalk_mcp.client import KTalkClient
+    from ktalk_mcp.contour_diagnostics import ContourDriftError
+    from ktalk_mcp.meeting_scheduling import create_meeting
+
+    httpx_mock.add_response(
+        status_code=404,
+        text="not found",
+        url=re.compile(rf"^{re.escape(base_url)}/api/calendar(\?.*)?$"),
+    )
+    httpx_mock.add_response(
+        status_code=200,
+        json={"recordings": []},
+        url=re.compile(rf"^{re.escape(base_url)}/api/recordings(\?.*)?$"),
+    )
+
+    async with KTalkClient(base_url=base_url, session_token=session_token) as client:
+        with pytest.raises(ContourDriftError):
+            await create_meeting(client, {"subject": "X"})
+
+
+async def test_create_meeting_logs_4xx_body_without_changing_user_message(
+    httpx_mock: HTTPXMock, base_url, session_token, caplog
+):
+    """Тело ответа на 4xx попадает в лог до классификации, само сообщение
+    исключения (`KTalkNotFoundError`) не меняется — лог дополняет, не заменяет
+    (ADR-007 п.3)."""
+    import logging
+
+    from ktalk_mcp.client import KTalkClient, KTalkNotFoundError
+    from ktalk_mcp.meeting_scheduling import create_meeting
+
+    httpx_mock.add_response(
+        status_code=404,
+        text="устройство роутинга: путь не смаршрутизирован",
+        url=re.compile(rf"^{re.escape(base_url)}/api/calendar(\?.*)?$"),
+    )
+    httpx_mock.add_response(
+        status_code=500,
+        url=re.compile(rf"^{re.escape(base_url)}/api/recordings(\?.*)?$"),
+    )
+
+    async with KTalkClient(base_url=base_url, session_token=session_token) as client:
+        with caplog.at_level(logging.WARNING):
+            with pytest.raises(KTalkNotFoundError) as exc_info:
+                await create_meeting(client, {"subject": "X"})
+
+    assert str(exc_info.value) == "Ресурс не найден."
+    assert "устройство роутинга: путь не смаршрутизирован" in caplog.text
 
 
 # --- NFR-7: fail-closed api-key ----------------------------------------------------------
