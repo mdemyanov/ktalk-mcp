@@ -1,0 +1,20 @@
+{
+  "roomName": "test-room-alpha",
+  "sessionHalls": ["hall-1"],
+  "stageConferenceId": "STAGE-0001",
+  "moderators": ["synthetic-mod-1"],
+  "anonymousModerators": [],
+  "allowAnonymous": true,
+  "anonymousAccessExpirationDate": "2026-12-31T00:00:00Z",
+  "anonymousAccessModifiedDate": "2026-01-01T00:00:00Z",
+  "audioPolicy": "allowed",
+  "videoPolicy": "allowed",
+  "screenSharePolicy": "moderatorsOnly",
+  "isModerator": false,
+  "conferenceId": "CONF-0001",
+  "sipSettings": {"enabled": true, "pinCode": "0000"},
+  "onlineUsers": 0,
+  "simultaneousTranslation": false,
+  "chatChannelSettings": {"general": {"enabled": true}},
+  "maskingSettings": {"enabled": false}
+}

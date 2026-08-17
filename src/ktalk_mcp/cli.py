@@ -7,6 +7,8 @@ import json
 import sys
 from pathlib import Path
 
+from ktalk_mcp.cli_meeting import cmd_create_meeting_confirm, cmd_create_meeting_preview
+from ktalk_mcp.cli_meeting import register_subparsers as register_meeting_subparsers
 from ktalk_mcp.cli_sync import cmd_auth_status, cmd_sync
 from ktalk_mcp.config import redact_secrets, resolve_db_path
 from ktalk_mcp.registry import Registry, migrate_from_vault, render_markdown_mirror
@@ -69,6 +71,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_auth = sub.add_parser("auth-status", help="Диагностика авторизации (FR-11)")
     p_auth.add_argument("--json", action="store_true")
+
+    register_meeting_subparsers(sub)
 
     return parser
 
@@ -198,6 +202,13 @@ def _cmd_migrate(reg: Registry, args) -> int:
     return 0
 
 
+_REGISTRY_FREE_COMMANDS = {
+    "auth-status",
+    "create-meeting-preview",
+    "create-meeting-confirm",
+}
+
+
 _HANDLERS = {
     "list": _cmd_list,
     "show": _cmd_show,
@@ -211,6 +222,8 @@ _HANDLERS = {
     "migrate": _cmd_migrate,
     "sync": cmd_sync,
     "auth-status": cmd_auth_status,
+    "create-meeting-preview": cmd_create_meeting_preview,
+    "create-meeting-confirm": cmd_create_meeting_confirm,
 }
 
 
@@ -220,13 +233,14 @@ def main(argv: list[str] | None = None) -> int:
     if not args.command:
         parser.print_help()
         return 2
-    db_path = resolve_db_path(args.db)
     handler = _HANDLERS.get(args.command)
     if handler is None:
         parser.print_help()
         return 2
     try:
-        with Registry(db_path) as reg:
+        if args.command in _REGISTRY_FREE_COMMANDS:
+            return handler(None, args)
+        with Registry(resolve_db_path(args.db)) as reg:
             return handler(reg, args)
     except Exception as exc:  # noqa: BLE001 - surface as CLI error
         # NFR-5: последний рубеж маскирования перед печатью — покрывает и КTalkError

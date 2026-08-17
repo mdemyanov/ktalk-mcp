@@ -3,6 +3,11 @@
 Пакет с двумя командами: MCP-сервер для доступа к записям Контур.Толк (KTalk)
 и CLI `ktalk` — операционный реестр записей на SQLite.
 
+## Стиль (безусловное правило)
+Писать сухо и сжато — в ответах, коммитах, статьях `content/`, докстрингах.
+Вывод, потом обоснование; без преамбул, повторов и похвалы. Нет факта — так и
+сказать. Правило действует всегда и приоритетнее привычки к развёрнутости.
+
 ## Stack
 - Python 3.12+, fastmcp, httpx, pydantic-settings, stdlib sqlite3 + argparse
 
@@ -14,6 +19,7 @@
 - `uv run ktalk-mcp` — запуск MCP-сервера
 - `uv run ktalk <команда>` — CLI реестра (`sync` [`--dry-run`], `auth-status`, `dashboard`,
   `list`, `show`, `mark-processing/done/partial/skipped`, `set-vault-id`, `export`, `migrate`)
+  плюс планирование: `create-meeting-preview`, `create-meeting-confirm` (только TTY)
 - `uv run pytest` — тесты
 - `uv run pytest tests/test_formatters.py -v` — тесты форматтеров
 - `uv run ruff check .` — линтинг
@@ -23,8 +29,15 @@
 ## Architecture
 Один пакет `ktalk_mcp`, общие `client.py`/`config.py` для MCP и CLI:
 - `server.py` — bootstrap FastMCP + `ktalk_auth_status`, entry point
-- `tools_recordings.py` / `tools_meetings.py` — MCP tools (10 штук) по записям и встречам
-- `cli.py` — CLI: argparse-подкоманды, вывод (`--json` для машинного чтения)
+- `tools_recordings.py` / `tools_meetings.py` / `tools_rooms.py` / `tools_scheduling.py` —
+  MCP tools (13 штук). Мутирующего инструмента нет: планирование отдаёт только предпросмотр
+- `rooms.py` / `calendar_reader.py` — чтение комнаты; чтение календаря с клиентской нарезкой
+  окна (сервер ограничивает запрос 7 днями, потолок сегмента — 100 элементов, `skip` не работает)
+- `meeting_body.py` / `confirmation.py` / `meeting_scheduling.py` / `cli_meeting.py` —
+  пишущая операция (ADR-005): allow-list компоновщик тела, токен подтверждения, POST, CLI
+- `contour_diagnostics.py` — корреляционная диагностика недокументированного контура (ADR-004)
+- `cli.py` — CLI: argparse-подкоманды, вывод (`--json` для машинного чтения);
+  `_REGISTRY_FREE_COMMANDS` — команды, не открывающие БД (`auth-status`, планирование)
 - `cli_sync.py` — команды `sync` (вкл. `--dry-run`) и `auth-status`
 - `registry.py` — SQLite-слой: схема (WAL), CRUD, дедуп, экспирация, миграция
   из markdown, рендер markdown-зеркала, мапперы API → строки

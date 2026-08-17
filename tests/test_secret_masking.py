@@ -17,6 +17,7 @@ import pytest
 from pytest_httpx import HTTPXMock
 
 SECRET = "pk-supersecret-abcdef123456"
+SESSION_SECRET = "sess-supersecret-abcdef123456"
 
 
 @pytest.fixture
@@ -93,6 +94,51 @@ def test_secret_not_in_cli_json_output(
     assert SECRET not in captured.err
 
 
+def test_session_secret_not_in_cli_text_output(
+    tmp_path, monkeypatch, httpx_mock: HTTPXMock, capsys
+):
+    """`redact_secrets` маскирует ОБА поля независимо (цикл по
+    `(ktalk_personal_api_key, ktalk_session_token)`) — представительный набор NFR-5/NFR-10
+    выше гоняет только `KTALK_PERSONAL_API_KEY` через CLI до печати; без этого теста ветка
+    `settings.ktalk_session_token` в `redact_secrets` остаётся непокрытой мутационно (найдено
+    QA-runner: удаление этого элемента кортежа не красит ни один существующий тест, хотя
+    session-режим — штатный путь эпика 0.5.0/0.6.0, не гипотетический)."""
+    monkeypatch.setenv("KTALK_BASE_URL", "https://test.ktalk.ru")
+    monkeypatch.setenv("KTALK_SESSION_TOKEN", SESSION_SECRET)
+    monkeypatch.delenv("KTALK_PERSONAL_API_KEY", raising=False)
+    monkeypatch.delenv("KTALK_REGISTRY_DB", raising=False)
+    httpx_mock.add_response(status_code=401)
+
+    from ktalk_mcp.cli import main
+
+    db = tmp_path / "r.db"
+    main(["--db", str(db), "sync", "--days", "7"])
+
+    captured = capsys.readouterr()
+    assert SESSION_SECRET not in captured.out
+    assert SESSION_SECRET not in captured.err
+
+
+def test_session_secret_not_in_cli_json_output(
+    tmp_path, monkeypatch, httpx_mock: HTTPXMock, capsys
+):
+    """Тот же случай, что выше, в `--json`-режиме."""
+    monkeypatch.setenv("KTALK_BASE_URL", "https://test.ktalk.ru")
+    monkeypatch.setenv("KTALK_SESSION_TOKEN", SESSION_SECRET)
+    monkeypatch.delenv("KTALK_PERSONAL_API_KEY", raising=False)
+    monkeypatch.delenv("KTALK_REGISTRY_DB", raising=False)
+    httpx_mock.add_response(status_code=401)
+
+    from ktalk_mcp.cli import main
+
+    db = tmp_path / "r.db"
+    main(["--db", str(db), "sync", "--days", "7", "--json"])
+
+    captured = capsys.readouterr()
+    assert SESSION_SECRET not in captured.out
+    assert SESSION_SECRET not in captured.err
+
+
 def test_secret_not_in_auth_status_cli_output(
     tmp_path, monkeypatch, httpx_mock: HTTPXMock, capsys
 ):
@@ -127,6 +173,98 @@ def test_secret_not_in_settings_repr_or_str(monkeypatch):
     assert SECRET not in str(settings)
 
 
+# --- NFR-10 (волна 0.6.0): расширяет NFR-5 на новые пути (комната/календарь/создание) --
+
+
+async def test_nfr10_secret_not_in_get_room_error_message(httpx_mock: HTTPXMock, base_url):
+    """Значение ключа не появляется в тексте ошибки при отказе `get_room`.
+
+    Session-режим, не api-key: по ADR-004 §2 `get_room` в api-key-режиме не имеет
+    записи профиля этой волной (`AuthMode.API_KEY: None`) — отказ там fail-closed
+    ДО сети (`OperationNotAvailableError`, см. `test_rooms.py`
+    `test_ac_fr17_3_get_room_apikey_mode_refuses_before_network_call`), замоканный
+    401 никогда не запрашивается. NFR-10 проверяется в физически достижимом
+    сценарии — там, где у операции есть профиль и сетевой вызов реально происходит.
+    """
+    from ktalk_mcp.client import KTalkAuthError, KTalkClient
+    from ktalk_mcp.rooms import get_room
+
+    httpx_mock.add_response(status_code=401)  # недокументированный путь: get_room
+    httpx_mock.add_response(status_code=401)  # контрольный вызов ADR-004 (401/401 -> reraise)
+
+    async with KTalkClient(base_url=base_url, session_token=SECRET) as client:
+        with pytest.raises(KTalkAuthError) as exc_info:
+            await get_room(client, "test-room-alpha")
+
+    assert SECRET not in str(exc_info.value)
+
+
+async def test_nfr10_secret_not_in_calendar_error_message(httpx_mock: HTTPXMock, base_url):
+    """Значение ключа не появляется в тексте ошибки при отказе чтения календаря.
+
+    Session-режим — тот же принцип, что у `get_room` выше: `get_calendar` в
+    api-key-режиме тоже без записи профиля этой волной (ADR-004 §2), 401 туда не
+    достижим."""
+    from datetime import date
+
+    from ktalk_mcp.calendar_reader import get_calendar_window
+    from ktalk_mcp.client import KTalkAuthError, KTalkClient
+
+    httpx_mock.add_response(status_code=401)  # недокументированный путь: get_calendar
+    httpx_mock.add_response(status_code=401)  # контрольный вызов ADR-004 (401/401 -> reraise)
+
+    async with KTalkClient(base_url=base_url, session_token=SECRET) as client:
+        with pytest.raises(KTalkAuthError) as exc_info:
+            await get_calendar_window(client, date(2026, 8, 1), date(2026, 8, 7))
+
+    assert SECRET not in str(exc_info.value)
+
+
+def test_nfr10_secret_not_in_create_meeting_preview_cli_output(
+    tmp_path, monkeypatch, capsys
+):
+    """NFR-10: предпросмотр создания встречи не утекает ключом — даже без сети,
+    предпросмотр читает Settings ленивым образом нигде, но проверяем на всякий
+    случай через тот же CLI-барьер."""
+    monkeypatch.setenv("KTALK_BASE_URL", "https://test.ktalk.ru")
+    monkeypatch.setenv("KTALK_PERSONAL_API_KEY", SECRET)
+    monkeypatch.delenv("KTALK_SESSION_TOKEN", raising=False)
+
+    from ktalk_mcp.cli import main
+
+    db = tmp_path / "r.db"
+    main(
+        [
+            "--db",
+            str(db),
+            "create-meeting-preview",
+            "--subject",
+            "Синтетическая встреча",
+            "--start",
+            "2026-08-15T10:00:00+03:00",
+            "--end",
+            "2026-08-15T11:00:00+03:00",
+            "--timezone",
+            "Europe/Moscow",
+            "--room-name",
+            "test-room-alpha",
+            "--no-required-users",
+            "--enable-auto-recording",
+            "true",
+            "--enable-sip",
+            "true",
+            "--pin-code",
+            "1234",
+            "--allow-anonymous",
+            "false",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert SECRET not in captured.out
+    assert SECRET not in captured.err
+
+
 def test_secret_redacted_from_unexpected_exception_via_cli_main(
     tmp_path, monkeypatch, capsys
 ):
@@ -137,6 +275,37 @@ def test_secret_redacted_from_unexpected_exception_via_cli_main(
     значение ключа не должно долететь до stderr в открытом виде."""
     monkeypatch.setenv("KTALK_PERSONAL_API_KEY", SECRET)
     monkeypatch.delenv("KTALK_SESSION_TOKEN", raising=False)
+    monkeypatch.delenv("KTALK_REGISTRY_DB", raising=False)
+
+    from ktalk_mcp import cli
+
+    def _boom(reg, args):
+        raise RuntimeError(f"unexpected failure, credential was {SECRET}")
+
+    monkeypatch.setitem(cli._HANDLERS, "list", _boom)
+
+    db = tmp_path / "r.db"
+    rc = cli.main(["--db", str(db), "list"])
+
+    captured = capsys.readouterr()
+    assert rc == 1
+    assert SECRET not in captured.out
+    assert SECRET not in captured.err
+    assert "REDACTED" in captured.err
+
+
+def test_session_token_redacted_from_unexpected_exception_via_cli_main(
+    tmp_path, monkeypatch, capsys
+):
+    """NFR-10: барьер `redact_secrets` маскирует ОБА канала аутентификации.
+
+    Близнец теста выше для `KTALK_SESSION_TOKEN`: ветка `settings.ktalk_session_token`
+    в `config.py::redact_secrets` иначе не упражняется ни одним тестом (находка QA
+    волны 2, мутация #6 — удаление session-токена из списка маскирования оставляло
+    весь suite зелёным).
+    """
+    monkeypatch.setenv("KTALK_SESSION_TOKEN", SECRET)
+    monkeypatch.delenv("KTALK_PERSONAL_API_KEY", raising=False)
     monkeypatch.delenv("KTALK_REGISTRY_DB", raising=False)
 
     from ktalk_mcp import cli

@@ -1,13 +1,21 @@
 """MCP-инструменты сущности «Встреча/архив/чат»: `ktalk_list_archive` (FR-9),
-`ktalk_get_chat_messages` (FR-10)."""
+`ktalk_get_chat_messages` (FR-10), `ktalk_list_calendar` (FR-18)."""
 
 from __future__ import annotations
 
+from datetime import date
+
 from fastmcp import FastMCP
 
+from ktalk_mcp.calendar_reader import get_calendar_window
 from ktalk_mcp.client import KTalkError, get_shared_client
 from ktalk_mcp.config import KTalkConfigError
-from ktalk_mcp.formatters import format_archive_list, format_chat_messages, render_tool_output
+from ktalk_mcp.formatters import (
+    format_archive_list,
+    format_calendar,
+    format_chat_messages,
+    render_tool_output,
+)
 
 _AUTH_ERRORS = (KTalkError, KTalkConfigError)
 
@@ -67,5 +75,41 @@ def register(mcp: FastMCP) -> None:
                 recording_key=recording_key, conference_key=conference_key, channel=channel
             )
             return render_tool_output(messages, format, format_chat_messages)
+        except _AUTH_ERRORS as e:
+            return str(e)
+
+    @mcp.tool()
+    async def ktalk_list_calendar(
+        start: str | None = None,
+        end: str | None = None,
+        room_name: str | None = None,
+        format: str = "markdown",
+    ) -> str:
+        """List scheduled meetings visible to the active authorization (FR-18).
+
+        Reports meetings this session/key can see — not necessarily a personal
+        calendar. Window is segmented server-side into <=7-day chunks transparently;
+        segments hitting the 100-item cap are flagged.
+
+        Args:
+            start: Window start date (ISO 8601), required
+            end: Window end date (ISO 8601), required
+            room_name: Optional filter by room name
+            format: Output format — "raw" (JSON) or "markdown"
+        """
+        if start is None or end is None:
+            raise ValueError("Нужно указать и начало (start), и конец (end) окна.")
+        try:
+            client = get_shared_client()
+            result = await get_calendar_window(
+                client, date.fromisoformat(start), date.fromisoformat(end), room_name=room_name
+            )
+            data = {
+                "items": result.items,
+                "incomplete_segments": [
+                    [s.isoformat(), e.isoformat()] for s, e in result.incomplete_segments
+                ],
+            }
+            return render_tool_output(data, format, format_calendar)
         except _AUTH_ERRORS as e:
             return str(e)
