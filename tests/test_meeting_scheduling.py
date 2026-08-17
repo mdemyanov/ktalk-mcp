@@ -259,6 +259,33 @@ async def test_adr008_401_with_working_control_raises_write_auth_mismatch_not_co
     assert session_token not in str(exc_info.value)
 
 
+async def test_dev008_empty_response_body_attached_as_empty_string_not_absent(
+    httpx_mock: HTTPXMock, base_url, session_token
+):
+    """DEV-008: тело пустое — это факт контура, не то же самое, что «тело не
+    прикреплено» (transport-уровня ошибка, где ответа вовсе не было)."""
+    from ktalk_mcp.client import KTalkClient, KTalkWriteAuthMismatchError
+    from ktalk_mcp.meeting_scheduling import create_meeting
+
+    httpx_mock.add_response(
+        status_code=401,
+        text="",
+        url=re.compile(rf"^{re.escape(base_url)}/api/calendar(\?.*)?$"),
+    )
+    httpx_mock.add_response(
+        status_code=200,
+        json={"recordings": []},
+        url=re.compile(rf"^{re.escape(base_url)}/api/recordings(\?.*)?$"),
+    )
+
+    async with KTalkClient(base_url=base_url, session_token=session_token) as client:
+        with pytest.raises(KTalkWriteAuthMismatchError) as exc_info:
+            await create_meeting(client, {"subject": "X"})
+
+    assert hasattr(exc_info.value, "response_body")
+    assert exc_info.value.response_body == ""
+
+
 async def test_dev007_control_call_does_not_inherit_cookie_from_failed_post(
     httpx_mock: HTTPXMock, base_url, session_token
 ):

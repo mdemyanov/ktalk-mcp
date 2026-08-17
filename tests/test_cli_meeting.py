@@ -273,6 +273,88 @@ def test_cli_create_meeting_confirm_over_real_tty_creates_exactly_once(
     assert requests[0].method == "POST"
 
 
+# --- DEV-008: матрица статус x контроль x тело — что реально видит человек ---------------
+#
+# Предыдущий цикл (DEV-007) не покрывал статусные отказы сквозняком вовсе — только
+# ConnectError. Здесь: 401/403 x контроль прошёл/упал x тело пустое/непустое.
+
+_DEV008_MATRIX = [
+    pytest.param(401, "тело ответа от /api/calendar", True, id="401-control_ok-body_nonempty"),
+    pytest.param(401, "", True, id="401-control_ok-body_empty"),
+    pytest.param(401, "тело ответа от /api/calendar", False, id="401-control_fail-body_nonempty"),
+    pytest.param(401, "", False, id="401-control_fail-body_empty"),
+    pytest.param(403, "тело ответа от /api/calendar", True, id="403-control_ok-body_nonempty"),
+    pytest.param(403, "", True, id="403-control_ok-body_empty"),
+    pytest.param(403, "тело ответа от /api/calendar", False, id="403-control_fail-body_nonempty"),
+    pytest.param(403, "", False, id="403-control_fail-body_empty"),
+]
+
+
+@pytest.mark.httpx_mock(assert_all_responses_were_requested=False)
+@pytest.mark.parametrize("status_code, response_text, control_ok", _DEV008_MATRIX)
+def test_dev008_status_control_body_matrix_prints_diagnostically_useful_text(
+    httpx_mock: HTTPXMock, monkeypatch, capsys, status_code, response_text, control_ok
+):
+    import re
+
+    base_url = "https://test.ktalk.ru"
+    httpx_mock.add_response(
+        status_code=status_code,
+        text=response_text,
+        url=re.compile(rf"^{re.escape(base_url)}/api/calendar(\?.*)?$"),
+    )
+    if control_ok:
+        httpx_mock.add_response(
+            status_code=200,
+            json={"recordings": []},
+            url=re.compile(rf"^{re.escape(base_url)}/api/recordings(\?.*)?$"),
+        )
+    else:
+        httpx_mock.add_response(
+            status_code=status_code,
+            url=re.compile(rf"^{re.escape(base_url)}/api/recordings(\?.*)?$"),
+        )
+
+    master_fd, slave_fd = _with_real_pty(monkeypatch, "да")
+    try:
+        rc = _run(
+            ["create-meeting-confirm", *_PREVIEW_ARGV_FULL[1:]], monkeypatch, base_url=base_url
+        )
+    finally:
+        os.close(master_fd)
+        os.close(slave_fd)
+
+    assert rc != 0
+    err = capsys.readouterr().err
+
+    # ФАКТ 1: HTTP-код исходного отказа виден всегда, в обеих ветках.
+    assert f"HTTP {status_code}" in err
+
+    # ФАКТ 2: пустое тело — видимый факт контура, не неразличимо с "тело потерялось".
+    if response_text:
+        assert response_text in err
+        assert "(пусто)" not in err
+    else:
+        assert "Тело ответа сервера: (пусто)" in err
+
+    if control_ok:
+        # ADR-008: контроль в порядке -> отдельное сообщение, не "Токен истёк"/"Доступ запрещён".
+        assert "Токен сессии истёк" not in err
+        assert "Доступ запрещён" not in err
+        assert "ADR-008" in err
+        assert "Контрольный вызов" not in err  # контроль не падал — нечего показывать
+    else:
+        # ФАКТ 3: контроль тоже упал -> это видно явно (класс/HTTP-код/текст), не тишина.
+        assert "Контрольный вызов" in err
+        assert "list_recordings" in err
+        assert "тоже упал" in err
+        assert "KTalkAuthError" in err
+        if status_code == 401:
+            assert "Токен сессии истёк" in err
+        else:
+            assert "Доступ запрещён" in err
+
+
 @pytest.mark.httpx_mock(assert_all_responses_were_requested=False)
 def test_cli_create_meeting_confirm_network_failure_no_retry_exactly_one_attempt(
     httpx_mock: HTTPXMock, monkeypatch

@@ -14,3 +14,7 @@ venv/
 .mypy_cache/
 .claude/settings.local.json
 .worktrees/
+
+# Снимки DevTools: содержат живые токены, куки и перс. данные (NFR-5/SEC-001)
+docs/*-recording.json
+docs/calendar

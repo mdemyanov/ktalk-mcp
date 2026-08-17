@@ -43,6 +43,16 @@ def _status_hint(error: Exception) -> str:
     return f"HTTP {status}" if status is not None else "ошибку авторизации"
 
 
+def _describe_control_failure(control_error: Exception) -> str:
+    """DEV-008: класс/HTTP-код/текст контрольного вызова — тот же формат, что
+    `_status_hint`, но не глотает исключение целиком. Нужен, когда контроль ТОЖЕ
+    падает: раньше его исход терялся в `raise error from None`, и человек не мог
+    отличить «контроль упал» от «диагностика не отработала»."""
+    status = getattr(control_error, "status_code", None)
+    status_part = f"HTTP {status}" if status is not None else "без HTTP-кода"
+    return f"{type(control_error).__name__} ({status_part}): {control_error}"
+
+
 async def diagnose_undocumented_failure(
     client: KTalkClient, operation: str, error: Exception
 ) -> None:
@@ -54,7 +64,15 @@ async def diagnose_undocumented_failure(
     пути)."""
     try:
         await client.list_recordings(top=1)
-    except TRANSIENT_ERRORS:
+    except TRANSIENT_ERRORS as control_error:
+        # DEV-008: контроль тоже упал — это не "диагностика не отработала", а
+        # самостоятельный факт, который должен дойти до человека вместе с
+        # исходной ошибкой, не молча (`except TRANSIENT_ERRORS: raise error from
+        # None` раньше терял его целиком).
+        error.control_probe = (
+            "Контрольный вызов list_recordings(top=1) тоже упал: "
+            f"{_describe_control_failure(control_error)}."
+        )
         raise error from None
     if isinstance(error, KTalkAuthError) and not isinstance(error, KTalkScopeError):
         new_exc = KTalkWriteAuthMismatchError(

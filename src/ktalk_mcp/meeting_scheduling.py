@@ -63,7 +63,10 @@ async def create_meeting(client: KTalkClient, body: dict) -> dict:
     try:
         client._classify(response, profile.required_scope)  # noqa: SLF001
     except TRANSIENT_ERRORS as exc:
-        if body_text:
+        # DEV-008: тело пустое ("") — это факт контура, отличный от "тело не
+        # прикреплено вовсе" (той ветки, где ответа не было — сетевой сбой выше).
+        # `if body_text:` терял этот факт при пустой строке.
+        if body_text is not None:
             exc.response_body = body_text  # атрибут читает CLI/MCP на границе вывода
         await diagnose_undocumented_failure(client, "create_meeting", exc)
         raise  # недостижимо

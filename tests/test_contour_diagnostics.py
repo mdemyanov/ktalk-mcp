@@ -109,6 +109,70 @@ async def test_diag_403_undocumented_control_403_reraises_original(
         assert exc_info.value is original
 
 
+# --- DEV-008: исход контрольного вызова, когда он ТОЖЕ падает, не должен теряться -----
+
+
+async def test_diag_401_control_also_401_attaches_control_probe_with_class_code_text(
+    httpx_mock: HTTPXMock, base_url, session_token
+):
+    """DEV-008: контроль тоже провалился -> на перевыброшенном исключении должен
+    появиться атрибут с исходом контроля (класс/HTTP-код/текст), а не тишина —
+    ровно то слепое пятно, что стоило четырёх боевых POST подряд."""
+    from ktalk_mcp.client import KTalkAuthError, KTalkClient
+    from ktalk_mcp.contour_diagnostics import diagnose_undocumented_failure
+
+    httpx_mock.add_response(status_code=401)  # control также 401
+
+    async with KTalkClient(base_url=base_url, session_token=session_token) as client:
+        original = KTalkAuthError("Токен сессии истёк или невалиден.")
+        with pytest.raises(KTalkAuthError) as exc_info:
+            await diagnose_undocumented_failure(client, "create_meeting", original)
+
+    probe = exc_info.value.control_probe
+    assert "list_recordings" in probe
+    assert "KTalkAuthError" in probe
+    assert "HTTP 401" in probe
+
+
+async def test_diag_403_control_also_403_attaches_control_probe_with_class_code_text(
+    httpx_mock: HTTPXMock, base_url, session_token
+):
+    from ktalk_mcp.client import KTalkAuthError, KTalkClient
+    from ktalk_mcp.contour_diagnostics import diagnose_undocumented_failure
+
+    httpx_mock.add_response(status_code=403)
+
+    async with KTalkClient(base_url=base_url, session_token=session_token) as client:
+        original = KTalkAuthError("Доступ запрещён: у текущей сессии нет прав на эту операцию.")
+        with pytest.raises(KTalkAuthError) as exc_info:
+            await diagnose_undocumented_failure(client, "create_meeting", original)
+
+    probe = exc_info.value.control_probe
+    assert "list_recordings" in probe
+    assert "KTalkAuthError" in probe
+    assert "HTTP 403" in probe
+
+
+async def test_diag_network_error_control_also_network_error_attaches_control_probe(
+    httpx_mock: HTTPXMock, base_url, session_token
+):
+    """Контроль падает не HTTP-кодом, а сетевой ошибкой -> явно «без HTTP-кода», не
+    молчание и не выдуманный код."""
+    from ktalk_mcp.client import KTalkClient
+    from ktalk_mcp.contour_diagnostics import diagnose_undocumented_failure
+
+    httpx_mock.add_exception(httpx.ConnectError("connection refused"))
+
+    async with KTalkClient(base_url=base_url, session_token=session_token) as client:
+        original = httpx.ConnectError("connection refused")
+        with pytest.raises(httpx.ConnectError) as exc_info:
+            await diagnose_undocumented_failure(client, "create_meeting", original)
+
+    probe = exc_info.value.control_probe
+    assert "ConnectError" in probe
+    assert "без HTTP-кода" in probe
+
+
 async def test_diag_unknown_400_undocumented_control_200_raises_contour_drift(
     httpx_mock: HTTPXMock, base_url, session_token
 ):

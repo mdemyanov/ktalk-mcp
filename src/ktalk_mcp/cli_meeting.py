@@ -85,11 +85,24 @@ def _meeting_kwargs(args: argparse.Namespace) -> dict:
     }
 
 
-def _print_error(message: str, response_body: str | None = None) -> None:
+# DEV-008: сентинел, а не `None` по умолчанию — различает "response_body не
+# прикреплён вовсе" (нет ответа сервера, печатать нечего) и "прикреплён пустой"
+# (тело ответа сервера фактически пустое — это наблюдение о контуре, не потеря
+# кода). Оба раньше давали одно и то же "ничего не печатать".
+_NO_RESPONSE_BODY = object()
+
+
+def _print_error(message: str, response_body: object = _NO_RESPONSE_BODY) -> None:
     """ADR-008 §3: тело ответа сервера (если было прикреплено к исключению) печатается
     вместе с основным текстом, тем же проходом `redact_secrets` — новой точки
-    маскирования не вводится."""
-    text = message if not response_body else f"{message}\nТело ответа сервера: {response_body}"
+    маскирования не вводится. Пустое тело печатается явно как факт (DEV-008), не
+    опускается."""
+    if response_body is _NO_RESPONSE_BODY:
+        text = message
+    elif response_body:
+        text = f"{message}\nТело ответа сервера: {response_body}"
+    else:
+        text = f"{message}\nТело ответа сервера: (пусто)"
     print(f"Ошибка: {redact_secrets(text)}", file=sys.stderr)
 
 
@@ -145,12 +158,27 @@ def cmd_create_meeting_confirm(_reg, args: argparse.Namespace) -> int:
     try:
         result = asyncio.run(_create_over_network(body))
     except Exception as exc:  # noqa: BLE001 - любая ошибка = "исход неизвестен", без retry
-        _print_error(
-            f"{exc} — исход неизвестен, проверьте `ktalk_list_calendar` перед повторной "
-            "попыткой (повторный запуск create-meeting-confirm не выполняет автоматический "
-            "retry, NFR-9/RES-003 §3).",
-            getattr(exc, "response_body", None),
+        # DEV-008: код ответа исходного отказа виден всегда, не только в ветках,
+        # чей текст сам его упоминает (ADR-008 KTalkWriteAuthMismatchError уже
+        # называет код — дублировать не нужно, но "сырое" 401/403 без правки текста
+        # (когда контроль тоже упал) кода не называет вовсе).
+        status_code = getattr(exc, "status_code", None)
+        base_message = str(exc)
+        if status_code is not None and f"HTTP {status_code}" not in base_message:
+            base_message = f"{base_message} (HTTP {status_code})"
+
+        message = (
+            f"{base_message} — исход неизвестен, проверьте `ktalk_list_calendar` перед "
+            "повторной попыткой (повторный запуск create-meeting-confirm не выполняет "
+            "автоматический retry, NFR-9/RES-003 §3)."
         )
+        # DEV-008: исход контрольного вызова (если он тоже падал) — видим отдельной
+        # строкой, не проглочен молча (contour_diagnostics.diagnose_undocumented_failure).
+        control_probe = getattr(exc, "control_probe", None)
+        if control_probe:
+            message = f"{message}\n{control_probe}"
+
+        _print_error(message, getattr(exc, "response_body", _NO_RESPONSE_BODY))
         return 1
 
     print(f"Встреча создана: {result.get('id', result)}")
