@@ -17,3 +17,5 @@ companion-спеку `<stem>-spec.md` в [40-architecture/](../../40-architectur
 | [ADR-007](ADR-007-create-meeting-path-correction.md) | Коррекция пути `create_meeting` на `/api/calendar` и дисциплина маркировки непроверенных экстраполяций | Proposed |
 | [ADR-008](ADR-008-write-auth-and-error-model.md) | Доп. заголовок `Authorization` на мутирующих операциях (гипотеза), `KTalkWriteAuthMismatchError`, тело 4xx-ответа как атрибут исключения | Draft |
 | [ADR-009](ADR-009-devtools-body-and-transport-correction.md) | Коррекция тела и транспорта `create_meeting` по браузерному снимку DevTools (14 полей, `X-Platform`, `requiredAttendees`) | Draft |
+| [ADR-010](ADR-010-contacts-resolution.md) | Резолюция участника встречи через справочник контактов (`GET /api/contacts`) — пересматривает ADR-009 §3 | Draft |
+| [ADR-011](ADR-011-meeting-cancel-update.md) | Контракт отмены встречи (`POST /calendar/{id}/cancel`), подтверждение привязано к (операция, id, reason); правка (`PUT`) отложена до измерения тела | Draft |
