@@ -110,9 +110,8 @@ async def test_ac_fr17_3_get_room_apikey_mode_refuses_before_network_call(
 ):
     """AC FR-17/3: api-key-режим без подтверждённого профиля -> отказ до сетевого
     вызова, а не запрос вслепую (ADR-004 п.2: `AuthMode.API_KEY: None` для `get_room`)."""
-    from ktalk_mcp.rooms import get_room
-
     from ktalk_mcp.client import KTalkClient, OperationNotAvailableError
+    from ktalk_mcp.rooms import get_room
 
     async with KTalkClient(base_url=base_url, personal_api_key=personal_api_key) as client:
         with pytest.raises(OperationNotAvailableError):
@@ -125,9 +124,8 @@ async def test_ac_fr17_1_get_room_session_mode_happy_path(
     httpx_mock: HTTPXMock, base_url, session_token
 ):
     """Session-режим, комната существует -> объект с полным составом полей."""
-    from ktalk_mcp.rooms import get_room
-
     from ktalk_mcp.client import KTalkClient
+    from ktalk_mcp.rooms import get_room
 
     httpx_mock.add_response(json=_fixture_json("room-detail-session.json"))
 
@@ -146,10 +144,9 @@ async def test_get_room_any_non_2xx_with_working_control_raises_contour_drift_no
     ЛЮБОЙ отказ (в т.ч. гипотетический 404 для несуществующей комнаты), при рабочем
     контрольном вызове, даёт ContourDriftError, не тихую классификацию "комната не
     найдена" (которая замаскировала бы реальный дрейф контура тем же кодом)."""
+    from ktalk_mcp.client import KTalkClient
     from ktalk_mcp.contour_diagnostics import ContourDriftError
     from ktalk_mcp.rooms import get_room
-
-    from ktalk_mcp.client import KTalkClient
 
     httpx_mock.add_response(status_code=404)  # недокументированный путь: гипотетический 404
     httpx_mock.add_response(json={"recordings": []})  # control: list_recordings(top=1) -> 200

@@ -85,9 +85,8 @@ def test_ac_fr13_1_preview_performs_zero_network_calls(httpx_mock: HTTPXMock):
 async def test_ac_fr13_2_preview_body_matches_body_sent_at_create(
     httpx_mock: HTTPXMock, base_url, session_token
 ):
-    from ktalk_mcp.meeting_scheduling import PreviewService, create_meeting
-
     from ktalk_mcp.client import KTalkClient
+    from ktalk_mcp.meeting_scheduling import PreviewService, create_meeting
 
     service = PreviewService(_store())
     body, _confirmation_id = service.preview(**FULL_KWARGS)
@@ -110,9 +109,8 @@ async def test_create_meeting_posts_to_calendar_path_without_api_prefix(
 ):
     """Путь БЕЗ префикса `/api` (mainpart, Ф-38) — отличается от `get_room`/
     `get_calendar` намеренно, не опечатка."""
-    from ktalk_mcp.meeting_scheduling import create_meeting
-
     from ktalk_mcp.client import KTalkClient
+    from ktalk_mcp.meeting_scheduling import create_meeting
 
     httpx_mock.add_response(status_code=200, json={"id": "MEET-0001"})
 
@@ -131,9 +129,8 @@ async def test_ac_fr13_6_network_failure_does_not_trigger_automatic_retry(
 ):
     """AC FR-13/6: сетевая ошибка/таймаут при создании -> инструмент не повторяет
     запрос автоматически — ровно один фактически выполненный сетевой вызов на запись."""
-    from ktalk_mcp.meeting_scheduling import create_meeting
-
     from ktalk_mcp.client import KTalkClient
+    from ktalk_mcp.meeting_scheduling import create_meeting
 
     httpx_mock.add_exception(httpx.ConnectError("connection refused"))
 
@@ -152,9 +149,8 @@ async def test_nfr7_create_meeting_apikey_mode_refuses_before_network_call(
 ):
     """`create_meeting`/api-key не проверено вовсе ни одним сигналом -> отказ до
     сети, тот же принцип, что `get_room`/api-key."""
-    from ktalk_mcp.meeting_scheduling import create_meeting
-
     from ktalk_mcp.client import KTalkClient, OperationNotAvailableError
+    from ktalk_mcp.meeting_scheduling import create_meeting
 
     async with KTalkClient(base_url=base_url, personal_api_key=personal_api_key) as client:
         with pytest.raises(OperationNotAvailableError):

@@ -51,9 +51,8 @@ def test_require_contract_field_present_field_does_not_raise():
 def test_contour_drift_error_is_a_ktalk_error():
     """ContourDriftError — подкласс KTalkError (наследует обработку/маскирование
     ошибок CLI/MCP, не отдельная иерархия)."""
-    from ktalk_mcp.contour_diagnostics import ContourDriftError
-
     from ktalk_mcp.client import KTalkError
+    from ktalk_mcp.contour_diagnostics import ContourDriftError
 
     assert issubclass(ContourDriftError, KTalkError)
 
@@ -66,9 +65,8 @@ async def test_diag_404_undocumented_control_200_raises_contour_drift(
 ):
     """недок=404 / контроль=200 -> контрольная операция в порядке, сбой локализован в
     недокументированном пути -> ContourDriftError."""
-    from ktalk_mcp.contour_diagnostics import ContourDriftError, diagnose_undocumented_failure
-
     from ktalk_mcp.client import KTalkClient, KTalkNotFoundError
+    from ktalk_mcp.contour_diagnostics import ContourDriftError, diagnose_undocumented_failure
 
     httpx_mock.add_response(json={"recordings": []})  # control: list_recordings(top=1)
 
@@ -83,9 +81,8 @@ async def test_diag_401_undocumented_control_401_reraises_original(
 ):
     """недок=401 / контроль=401 -> контроль тоже провалился, это не дрейф контура,
     исходная ошибка перевыбрасывается как есть."""
-    from ktalk_mcp.contour_diagnostics import diagnose_undocumented_failure
-
     from ktalk_mcp.client import KTalkAuthError, KTalkClient
+    from ktalk_mcp.contour_diagnostics import diagnose_undocumented_failure
 
     httpx_mock.add_response(status_code=401)  # control также 401
 
@@ -100,9 +97,8 @@ async def test_diag_403_undocumented_control_403_reraises_original(
     httpx_mock: HTTPXMock, base_url, session_token
 ):
     """недок=403 / контроль=403 -> тот же принцип, что 401/401."""
-    from ktalk_mcp.contour_diagnostics import diagnose_undocumented_failure
-
     from ktalk_mcp.client import KTalkAuthError, KTalkClient
+    from ktalk_mcp.contour_diagnostics import diagnose_undocumented_failure
 
     httpx_mock.add_response(status_code=403)
 
@@ -117,9 +113,8 @@ async def test_diag_unknown_400_undocumented_control_200_raises_contour_drift(
     httpx_mock: HTTPXMock, base_url, session_token
 ):
     """недок=неизвестный 400 / контроль=200 -> ContourDriftError."""
-    from ktalk_mcp.contour_diagnostics import ContourDriftError, diagnose_undocumented_failure
-
     from ktalk_mcp.client import KTalkClient, KTalkError
+    from ktalk_mcp.contour_diagnostics import ContourDriftError, diagnose_undocumented_failure
 
     httpx_mock.add_response(json={"recordings": []})
 
@@ -134,9 +129,8 @@ async def test_diag_network_error_undocumented_control_200_raises_contour_drift(
 ):
     """недок=сетевая ошибка / контроль=200 -> ContourDriftError (TRANSIENT_ERRORS
     включает httpx.HTTPError, не только KTalkError)."""
-    from ktalk_mcp.contour_diagnostics import ContourDriftError, diagnose_undocumented_failure
-
     from ktalk_mcp.client import KTalkClient
+    from ktalk_mcp.contour_diagnostics import ContourDriftError, diagnose_undocumented_failure
 
     httpx_mock.add_response(json={"recordings": []})
 
@@ -149,9 +143,8 @@ async def test_diag_network_error_undocumented_control_200_raises_contour_drift(
 async def test_diag_transient_errors_tuple_covers_ktalk_error_and_httpx_error():
     """TRANSIENT_ERRORS — публичная константа, используемая вызывающими модулями
     (`rooms.py`/`calendar_reader.py`) в `except TRANSIENT_ERRORS`."""
-    from ktalk_mcp.contour_diagnostics import TRANSIENT_ERRORS
-
     from ktalk_mcp.client import KTalkError
+    from ktalk_mcp.contour_diagnostics import TRANSIENT_ERRORS
 
     assert KTalkError in TRANSIENT_ERRORS
     assert httpx.HTTPError in TRANSIENT_ERRORS
