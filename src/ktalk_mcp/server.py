@@ -7,6 +7,8 @@ from fastmcp import FastMCP
 from ktalk_mcp.client import KTalkError, get_shared_client
 from ktalk_mcp.config import KTalkConfigError
 from ktalk_mcp.formatters import format_auth_status, render_tool_output
+from ktalk_mcp.tools_contacts import register as register_contacts_tools
+from ktalk_mcp.tools_meeting_cancel import register as register_meeting_cancel_tools
 from ktalk_mcp.tools_meetings import register as register_meetings_tools
 from ktalk_mcp.tools_recordings import register as register_recordings_tools
 from ktalk_mcp.tools_rooms import register as register_rooms_tools
@@ -23,6 +25,8 @@ register_recordings_tools(mcp)
 register_meetings_tools(mcp)
 register_rooms_tools(mcp)
 register_scheduling_tools(mcp)
+register_contacts_tools(mcp)
+register_meeting_cancel_tools(mcp)
 
 
 @mcp.tool()

@@ -7,7 +7,14 @@ import json
 import sys
 from pathlib import Path
 
-from ktalk_mcp.cli_meeting import cmd_create_meeting_confirm, cmd_create_meeting_preview
+from ktalk_mcp.cli_contacts import cmd_search_contacts
+from ktalk_mcp.cli_contacts import register_subparsers as register_contacts_subparsers
+from ktalk_mcp.cli_meeting import (
+    cmd_cancel_meeting_confirm,
+    cmd_cancel_meeting_preview,
+    cmd_create_meeting_confirm,
+    cmd_create_meeting_preview,
+)
 from ktalk_mcp.cli_meeting import register_subparsers as register_meeting_subparsers
 from ktalk_mcp.cli_sync import cmd_auth_status, cmd_sync
 from ktalk_mcp.config import redact_secrets, resolve_db_path
@@ -73,6 +80,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_auth.add_argument("--json", action="store_true")
 
     register_meeting_subparsers(sub)
+    register_contacts_subparsers(sub)
 
     return parser
 
@@ -206,6 +214,9 @@ _REGISTRY_FREE_COMMANDS = {
     "auth-status",
     "create-meeting-preview",
     "create-meeting-confirm",
+    "cancel-meeting-preview",
+    "cancel-meeting-confirm",
+    "search-contacts",
 }
 
 
@@ -224,6 +235,9 @@ _HANDLERS = {
     "auth-status": cmd_auth_status,
     "create-meeting-preview": cmd_create_meeting_preview,
     "create-meeting-confirm": cmd_create_meeting_confirm,
+    "cancel-meeting-preview": cmd_cancel_meeting_preview,
+    "cancel-meeting-confirm": cmd_cancel_meeting_confirm,
+    "search-contacts": cmd_search_contacts,
 }
 
 

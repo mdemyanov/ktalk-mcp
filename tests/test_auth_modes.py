@@ -226,15 +226,18 @@ def test_endpoint_profile_mutating_defaults_to_false():
     assert profile.mutating is False
 
 
-def test_only_create_meeting_session_profile_is_mutating():
-    """ADR-008 §1: `mutating=True` — только у `create_meeting[AuthMode.SESSION]`,
-    ни одна другая запись таблицы не меняется по умолчанию."""
+def test_only_create_and_cancel_meeting_session_profiles_are_mutating():
+    """ADR-008 §1 + ADR-011 §1: `mutating=True` — только у
+    `create_meeting[AuthMode.SESSION]` и `cancel_meeting[AuthMode.SESSION]`
+    (вторая мутирующая операция, тот же барьер, не слабее первой), ни одна
+    другая запись таблицы не меняется по умолчанию."""
     from ktalk_mcp.client import OPERATION_PROFILES
     from ktalk_mcp.config import AuthMode
 
+    mutating_operations = {"create_meeting", "cancel_meeting"}
     for operation, modes in OPERATION_PROFILES.items():
         for mode, profile in modes.items():
             if profile is None:
                 continue
-            expected = operation == "create_meeting" and mode is AuthMode.SESSION
+            expected = operation in mutating_operations and mode is AuthMode.SESSION
             assert profile.mutating is expected, (operation, mode)

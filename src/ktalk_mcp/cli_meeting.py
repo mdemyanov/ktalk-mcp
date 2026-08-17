@@ -17,9 +17,10 @@ import sys
 from ktalk_mcp.client import KTalkClient
 from ktalk_mcp.config import Settings, redact_secrets
 from ktalk_mcp.confirmation import ConfirmationStore
-from ktalk_mcp.formatters import format_meeting_preview, render_tool_output
+from ktalk_mcp.formatters import format_cancel_preview, format_meeting_preview, render_tool_output
 from ktalk_mcp.meeting_body import MissingFieldError, canonical_body_hash
-from ktalk_mcp.meeting_scheduling import PreviewService, create_meeting
+from ktalk_mcp.meeting_cancel import CancelPreviewService, build_cancel_confirmation_payload
+from ktalk_mcp.meeting_scheduling import PreviewService, cancel_meeting, create_meeting
 
 # Слово подтверждения не зафиксировано ни спекой, ни ADR — рабочая гипотеза
 # QA-author (at-design.md «Допущения»), подтверждена здесь как решение Dev.
@@ -71,9 +72,26 @@ def _add_meeting_args(parser: argparse.ArgumentParser) -> None:
     )
 
 
+def _add_cancel_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--id",
+        required=True,
+        help="Base64 id встречи (Ф-56, из ответа create-meeting-confirm или чтения "
+        "календаря); не хранится проектом",
+    )
+    parser.add_argument(
+        "--reason",
+        default="",
+        help='Причина отмены (опционально, дефолт "" — единственный подтверждённый '
+        "рабочий образец, Ф-50)",
+    )
+
+
 def register_subparsers(sub) -> None:
     _add_meeting_args(sub.add_parser("create-meeting-preview", help="Предпросмотр встречи (FR-13)"))
     _add_meeting_args(sub.add_parser("create-meeting-confirm", help="Создать встречу (только TTY)"))
+    _add_cancel_args(sub.add_parser("cancel-meeting-preview", help="Предпросмотр отмены (ADR-011)"))
+    _add_cancel_args(sub.add_parser("cancel-meeting-confirm", help="Отменить встречу (только TTY)"))
 
 
 def _required_attendee_keys(args: argparse.Namespace) -> list[str] | None:
@@ -198,4 +216,68 @@ def cmd_create_meeting_confirm(_reg, args: argparse.Namespace) -> int:
         return 1
 
     print(f"Встреча создана: {result.get('id', result)}")
+    return 0
+
+
+async def _cancel_over_network(id: str, reason: str) -> dict:
+    async with KTalkClient.from_settings(Settings()) as client:
+        return await cancel_meeting(client, id=id, reason=reason)
+
+
+def cmd_cancel_meeting_preview(_reg, args: argparse.Namespace) -> int:
+    """Без TTY-барьера, без сети — только предпросмотр (ADR-011-spec §4)."""
+    service = CancelPreviewService(ConfirmationStore())
+    payload, confirmation_id = service.preview(id=args.id, reason=args.reason)
+    data = {"payload": payload, "confirmation_id": confirmation_id}
+    print(render_tool_output(data, "markdown", format_cancel_preview))
+    return 0
+
+
+def cmd_cancel_meeting_confirm(_reg, args: argparse.Namespace) -> int:
+    """TTY-барьер первым делом (§4) — тот же порядок, что `create-meeting-confirm`."""
+    if not (sys.stdin.isatty() and sys.stdout.isatty()):
+        print("Нужен интерактивный терминал (см. README).", file=sys.stderr)
+        return 1
+
+    store = ConfirmationStore()
+    service = CancelPreviewService(store)
+    payload, confirmation_id = service.preview(id=args.id, reason=args.reason)
+
+    preview_data = {"payload": payload, "confirmation_id": confirmation_id}
+    print(render_tool_output(preview_data, "markdown", format_cancel_preview))
+    print(f'\nВведите "{_CONFIRM_WORD}" для подтверждения отмены встречи: ', end="", flush=True)
+    answer = sys.stdin.readline().strip()
+    if answer.lower() != _CONFIRM_WORD:
+        print("Отменено — подтверждение не получено.", file=sys.stderr)
+        return 1
+
+    recomputed_hash = canonical_body_hash(
+        build_cancel_confirmation_payload(id=args.id, reason=args.reason)
+    )
+    if not store.match(confirmation_id, recomputed_hash):
+        _print_error("Подтверждение истекло или недействительно — начните заново.")
+        return 1
+    store.consume(confirmation_id)  # до сетевой попытки — повтор требует нового вызова
+
+    try:
+        result = asyncio.run(_cancel_over_network(args.id, args.reason))
+    except Exception as exc:  # noqa: BLE001 - любая ошибка = "исход неизвестен", без retry
+        status_code = getattr(exc, "status_code", None)
+        base_message = str(exc)
+        if status_code is not None and f"HTTP {status_code}" not in base_message:
+            base_message = f"{base_message} (HTTP {status_code})"
+
+        message = (
+            f"{base_message} — исход неизвестен, проверьте `ktalk_list_calendar` перед "
+            "повторной попыткой (повторный запуск cancel-meeting-confirm не выполняет "
+            "автоматический retry, NFR-9/ADR-005 п.2)."
+        )
+        control_probe = getattr(exc, "control_probe", None)
+        if control_probe:
+            message = f"{message}\n{control_probe}"
+
+        _print_error(message, getattr(exc, "response_body", _NO_RESPONSE_BODY))
+        return 1
+
+    print(f"Встреча отменена: {result}")
     return 0

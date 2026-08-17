@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 
+from ktalk_mcp.auth import quote_path_param
 from ktalk_mcp.client import KTalkClient
 from ktalk_mcp.confirmation import ConfirmationStore
 from ktalk_mcp.contour_diagnostics import TRANSIENT_ERRORS, diagnose_undocumented_failure
@@ -77,5 +78,40 @@ async def create_meeting(client: KTalkClient, body: dict) -> dict:
         if body_text is not None:
             exc.response_body = body_text  # атрибут читает CLI/MCP на границе вывода
         await diagnose_undocumented_failure(client, "create_meeting", exc)
+        raise  # недостижимо
+    return response.json()
+
+
+async def cancel_meeting(client: KTalkClient, *, id: str, reason: str = "") -> dict:
+    """Ровно одна сетевая попытка `POST /api/calendar/{id}/cancel`, без retry —
+    тот же контракт, что `create_meeting` (ADR-005 п.2). Транспорт (заголовки,
+    отсутствие query) — тот же код, что `create_meeting`: `profile.mutating`
+    общий признак, не специфичный для операции. `{id}` — обязательный
+    `quote_path_param` (Ф-56): `+`/`/`/`=` меняют путь без квотирования."""
+    profile = client._profile_for("cancel_meeting")  # noqa: SLF001
+    path = profile.path_template.format(id=quote_path_param(id))
+    headers = (
+        {"Authorization": f"Session {client._auth.credential}", "X-Platform": "web"}  # noqa: SLF001
+        if profile.mutating
+        else None
+    )
+    request = client._client.build_request(  # noqa: SLF001
+        "POST", path, json={"reason": reason}, headers=headers
+    )
+    if profile.mutating:
+        request.url = request.url.copy_remove_param("sessionToken")
+    try:
+        response = await client._client.send(request)  # noqa: SLF001
+    except TRANSIENT_ERRORS as exc:
+        await diagnose_undocumented_failure(client, "cancel_meeting", exc)
+        raise  # недостижимо
+
+    body_text = response.text[:500] if response.status_code >= 400 else None
+    try:
+        client._classify(response, profile.required_scope)  # noqa: SLF001
+    except TRANSIENT_ERRORS as exc:
+        if body_text is not None:
+            exc.response_body = body_text
+        await diagnose_undocumented_failure(client, "cancel_meeting", exc)
         raise  # недостижимо
     return response.json()

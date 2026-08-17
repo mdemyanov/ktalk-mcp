@@ -115,9 +115,8 @@ def test_cancel_preview_two_issues_of_same_payload_give_different_confirmation_i
 
 
 def test_cancel_match_false_for_unknown_confirmation_id():
-    from ktalk_mcp.meeting_cancel import build_cancel_confirmation_payload
-
     from ktalk_mcp.meeting_body import canonical_body_hash
+    from ktalk_mcp.meeting_cancel import build_cancel_confirmation_payload
 
     store = _store()
     payload = build_cancel_confirmation_payload(id=SIMPLE_ID, reason="x")
@@ -135,9 +134,8 @@ def test_ac_11_1_confirmation_issued_for_id_a_does_not_match_id_b_same_reason():
     `{"reason": reason}` без `id` совпал бы всегда (особенно при
     `reason=""`, единственном наблюдённом образце). Хеш обязан быть построен
     над `{"operation", "id", "reason"}`, не над одним `reason`."""
-    from ktalk_mcp.meeting_cancel import build_cancel_confirmation_payload
-
     from ktalk_mcp.meeting_body import canonical_body_hash
+    from ktalk_mcp.meeting_cancel import build_cancel_confirmation_payload
 
     store = _store()
     payload_a = build_cancel_confirmation_payload(id="meeting-A", reason="x")
@@ -153,9 +151,8 @@ def test_ac_11_1_via_cancel_preview_service_end_to_end():
     """Тот же сценарий на уровне `CancelPreviewService` целиком (не только
     компоновщика), чтобы поймать регресс, если Dev захешировал бы что-то
     иное внутри `preview`, чем `build_cancel_confirmation_payload`."""
-    from ktalk_mcp.meeting_cancel import CancelPreviewService, build_cancel_confirmation_payload
-
     from ktalk_mcp.meeting_body import canonical_body_hash
+    from ktalk_mcp.meeting_cancel import CancelPreviewService, build_cancel_confirmation_payload
 
     store = _store()
     service = CancelPreviewService(store)
@@ -187,7 +184,11 @@ async def test_ac_11_2_cancel_meeting_quotes_id_with_plus_slash_equals(
     assert b"%2F" in request.url.raw_path
     assert b"%3D" in request.url.raw_path
     assert b"AAAA+BBBB/CCCC==" not in request.url.raw_path
-    assert request.url.raw_path == b"/api/calendar/AAAA%2BBBB%2FCCCC%3D%3D/cancel"
+    # Опечатка счёта символов в исходном стабе (недостающий один "B"): quote() для
+    # "AAAA+BBBB/CCCC==" даёт "AAAA%2BBBBB%2FCCCC%3D%3D" — %2B (эскейп "+") плюс
+    # все 4 литеральных "B" дают пять подряд "B" после "%2", не четыре. Зафиксировано
+    # в content/60-implementation/dev-010-contacts-and-cancel.md.
+    assert request.url.raw_path == b"/api/calendar/AAAA%2BBBBB%2FCCCC%3D%3D/cancel"
 
 
 async def test_cancel_meeting_posts_to_expected_path(
@@ -235,9 +236,8 @@ async def test_ac_11_4_non_empty_reason_included_verbatim_in_payload_and_body(
     исход сервера (ADR-011-spec явно запрещает утверждать код ответа)."""
     import json as _json
 
-    from ktalk_mcp.meeting_cancel import build_cancel_confirmation_payload
-
     from ktalk_mcp.client import KTalkClient
+    from ktalk_mcp.meeting_cancel import build_cancel_confirmation_payload
     from ktalk_mcp.meeting_scheduling import cancel_meeting
 
     reason = "встреча переносится на следующую неделю"

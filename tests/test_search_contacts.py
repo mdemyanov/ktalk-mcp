@@ -57,9 +57,8 @@ def _candidate(key: str, surname: str, firstname: str, post: str = "") -> dict:
 async def test_ac_10_1_zero_matches_search_contacts_returns_empty_list(
     httpx_mock: HTTPXMock, base_url, session_token
 ):
-    from ktalk_mcp.contacts import search_contacts
-
     from ktalk_mcp.client import KTalkClient
+    from ktalk_mcp.contacts import search_contacts
 
     httpx_mock.add_response(json={"contacts": []})
 
@@ -98,9 +97,8 @@ def test_ac_10_1_zero_matches_cli_message_names_the_query_and_nonzero_exit(
 async def test_ac_10_2_single_match_returns_one_candidate_with_key_name_post(
     httpx_mock: HTTPXMock, base_url, session_token
 ):
-    from ktalk_mcp.contacts import search_contacts
-
     from ktalk_mcp.client import KTalkClient
+    from ktalk_mcp.contacts import search_contacts
 
     httpx_mock.add_response(
         json={"contacts": [_candidate("668", "Иванов", "Иван", post="Разработчик")]}
@@ -123,9 +121,8 @@ async def test_ac_10_3_multiple_matches_returns_full_unranked_list_preserving_se
 ):
     """Порядок кандидатов — как в ответе сервера, не пересортирован по
     «похожести» (ADR-010 п.3: автовыбор/ранжирование запрещены явно)."""
-    from ktalk_mcp.contacts import search_contacts
-
     from ktalk_mcp.client import KTalkClient
+    from ktalk_mcp.contacts import search_contacts
 
     server_order = [
         _candidate("668", "Иванов", "Иван"),
@@ -147,9 +144,8 @@ async def test_ac_10_3_multiple_matches_returns_full_unranked_list_preserving_se
 async def test_ac_10_4_search_contacts_apikey_mode_refuses_before_network_call(
     httpx_mock: HTTPXMock, base_url, personal_api_key
 ):
-    from ktalk_mcp.contacts import search_contacts
-
     from ktalk_mcp.client import KTalkClient, OperationNotAvailableError
+    from ktalk_mcp.contacts import search_contacts
 
     async with KTalkClient(base_url=base_url, personal_api_key=personal_api_key) as client:
         with pytest.raises(OperationNotAvailableError):
@@ -164,9 +160,8 @@ async def test_ac_10_4_search_contacts_apikey_mode_refuses_before_network_call(
 async def test_ac_10_5_secret_not_in_zero_match_output(
     httpx_mock: HTTPXMock, base_url, session_token
 ):
-    from ktalk_mcp.contacts import search_contacts
-
     from ktalk_mcp.client import KTalkClient
+    from ktalk_mcp.contacts import search_contacts
     from ktalk_mcp.formatters import format_search_contacts
 
     httpx_mock.add_response(json={"contacts": []})
@@ -181,9 +176,8 @@ async def test_ac_10_5_secret_not_in_zero_match_output(
 async def test_ac_10_5_secret_not_in_single_match_output(
     httpx_mock: HTTPXMock, base_url, session_token
 ):
-    from ktalk_mcp.contacts import search_contacts
-
     from ktalk_mcp.client import KTalkClient
+    from ktalk_mcp.contacts import search_contacts
     from ktalk_mcp.formatters import format_search_contacts
 
     httpx_mock.add_response(json={"contacts": [_candidate("668", "Иванов", "Иван")]})
@@ -198,9 +192,8 @@ async def test_ac_10_5_secret_not_in_single_match_output(
 async def test_ac_10_5_secret_not_in_multi_match_output(
     httpx_mock: HTTPXMock, base_url, session_token
 ):
-    from ktalk_mcp.contacts import search_contacts
-
     from ktalk_mcp.client import KTalkClient
+    from ktalk_mcp.contacts import search_contacts
     from ktalk_mcp.formatters import format_search_contacts
 
     httpx_mock.add_response(
@@ -220,9 +213,8 @@ async def test_ac_10_5_secret_not_in_multi_match_output(
 
 
 async def test_ac_10_5_secret_not_in_apikey_refusal_message(base_url, personal_api_key):
-    from ktalk_mcp.contacts import search_contacts
-
     from ktalk_mcp.client import KTalkClient, OperationNotAvailableError
+    from ktalk_mcp.contacts import search_contacts
 
     async with KTalkClient(base_url=base_url, personal_api_key=personal_api_key) as client:
         with pytest.raises(OperationNotAvailableError) as exc_info:
@@ -237,9 +229,8 @@ async def test_ac_10_5_secret_not_in_apikey_refusal_message(base_url, personal_a
 async def test_search_contacts_sends_expected_get_request_with_fixed_top_and_flags(
     httpx_mock: HTTPXMock, base_url, session_token
 ):
-    from ktalk_mcp.contacts import search_contacts
-
     from ktalk_mcp.client import KTalkClient
+    from ktalk_mcp.contacts import search_contacts
 
     httpx_mock.add_response(json={"contacts": []})
 

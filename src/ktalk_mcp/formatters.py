@@ -495,6 +495,46 @@ def format_meeting_preview(data: dict) -> str:
     return "\n".join(lines)
 
 
+def format_cancel_preview(data: dict) -> str:
+    """Format `ktalk_preview_cancel_meeting`/`cancel-meeting-preview`/
+    `cancel-meeting-confirm` result (ADR-011-spec §6) to markdown."""
+    payload = data.get("payload") or {}
+    lines = [
+        f"# Отмена встречи {payload.get('id')} (ещё не выполнена)",
+        "",
+        f"- Причина: {payload.get('reason') or '(пусто)'}",
+        f"- confirmation_id (справочно, не межпроцессный): {data.get('confirmation_id')}",
+    ]
+    return "\n".join(lines)
+
+
+def format_search_contacts(candidates: list[dict], *, query: str) -> str:
+    """Format `search_contacts` result (ADR-010-spec §4) to markdown. Три
+    различимые ветки по числу совпадений (0/1/>1) — без автовыбора (NFR-9)."""
+    if not candidates:
+        return f'# Поиск контактов «{query}»\n\nНичего не найдено по запросу «{query}».'
+    if len(candidates) == 1:
+        c = candidates[0]
+        return (
+            f'# Поиск контактов «{query}»\n\n'
+            f"Найден один кандидат:\n\n"
+            f"- **key:** {c.get('key')}\n"
+            f"- **ФИО:** {c.get('name')}\n"
+            f"- **Должность:** {c.get('post') or '—'}\n"
+        )
+    lines = [
+        f'# Поиск контактов «{query}» ({len(candidates)} совпадений)',
+        "",
+        "Без ранжирования, порядок — как в ответе сервера; выбор — за вами.",
+        "",
+        "| key | ФИО | Должность |",
+        "|---|---|---|",
+    ]
+    for c in candidates:
+        lines.append(f"| {c.get('key')} | {c.get('name')} | {c.get('post') or '—'} |")
+    return "\n".join(lines)
+
+
 def format_auth_status(data: dict) -> str:
     """Format `ktalk_auth_status`/`ktalk auth-status` result (FR-11) to markdown."""
     lines = [
