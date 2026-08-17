@@ -415,3 +415,24 @@ async def test_secret_not_in_cancel_meeting_error_message(
 
     assert session_token not in str(exc_info.value)
     assert session_token not in (exc_info.value.response_body or "")
+
+
+# --- Ф-57: 200 с пустым телом — живой факт боевой отмены 2026-08-19 -------------------------
+
+
+async def test_cancel_meeting_returns_empty_dict_on_200_with_empty_body(
+    httpx_mock: HTTPXMock, base_url, session_token
+):
+    """Боевая отмена 2026-08-19: сервер выполнил операцию и ответил 200 с пустым
+    телом. Безусловный `response.json()` падал на `JSONDecodeError`, и CLI печатал
+    «исход неизвестен» по успешной операции — худший вид ошибки для необратимого
+    действия. Ф-50 фиксировала только код ответа, не наличие тела."""
+    from ktalk_mcp.client import KTalkClient
+    from ktalk_mcp.meeting_scheduling import cancel_meeting
+
+    httpx_mock.add_response(status_code=200, content=b"")
+
+    async with KTalkClient(base_url=base_url, session_token=session_token) as client:
+        result = await cancel_meeting(client, id=SIMPLE_ID, reason="")
+
+    assert result == {}

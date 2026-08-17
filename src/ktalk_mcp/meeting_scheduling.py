@@ -114,4 +114,7 @@ async def cancel_meeting(client: KTalkClient, *, id: str, reason: str = "") -> d
             exc.response_body = body_text
         await diagnose_undocumented_failure(client, "cancel_meeting", exc)
         raise  # недостижимо
-    return response.json()
+    # Ф-57: успешная отмена отвечает 200 с ПУСТЫМ телом — `response.json()` на нём
+    # падает, и необратимая выполненная операция докладывалась как «исход неизвестен».
+    # Отличие от `create_meeting`, чей ответ несёт объект встречи.
+    return response.json() if response.content else {}
