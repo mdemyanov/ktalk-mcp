@@ -34,22 +34,37 @@ async def create_meeting(client: KTalkClient, body: dict) -> dict:
     """Ровно одна сетевая попытка `POST /api/calendar`, без retry. ADR-007 п.3:
     оборачивается корреляционной диагностикой ADR-004, тем же приёмом, что
     `calendar_reader._fetch_segment` — сбой недокументированного пути неотличим
-    от обычного auth/сетевого сбоя без контрольного вызова."""
+    от обычного auth/сетевого сбоя без контрольного вызова.
+
+    ADR-008: на `profile.mutating` (сегодня только session-режим этой операции)
+    добавляется заголовок `Authorization: Session <token>` поверх query-параметра
+    (не вместо — ADR-003 инвариант транспорта чтения не трогается). Тело ответа
+    4xx/5xx читается до классификации и прикрепляется к перехваченному исключению
+    атрибутом `response_body` (обрезано до 500 символов) — переживает прогон
+    независимо от конфигурации `logging`, которой в проекте нет."""
     profile = client._profile_for("create_meeting")  # noqa: SLF001
+    headers = (
+        {"Authorization": f"Session {client._auth.credential}"}  # noqa: SLF001
+        if profile.mutating
+        else None
+    )
     try:
-        response = await client._client.post(profile.path_template, json=body)  # noqa: SLF001
+        response = await client._client.post(  # noqa: SLF001
+            profile.path_template, json=body, headers=headers
+        )
     except TRANSIENT_ERRORS as exc:
         await diagnose_undocumented_failure(client, "create_meeting", exc)
         raise  # недостижимо
 
-    if response.status_code >= 400:
-        logger.warning(
-            "create_meeting: HTTP %s, тело: %s", response.status_code, response.text
-        )
+    body_text = response.text[:500] if response.status_code >= 400 else None
+    if body_text:
+        logger.warning("create_meeting: HTTP %s, тело: %s", response.status_code, body_text)
 
     try:
         client._classify(response, profile.required_scope)  # noqa: SLF001
     except TRANSIENT_ERRORS as exc:
+        if body_text:
+            exc.response_body = body_text  # атрибут читает CLI/MCP на границе вывода
         await diagnose_undocumented_failure(client, "create_meeting", exc)
         raise  # недостижимо
     return response.json()

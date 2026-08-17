@@ -15,3 +15,4 @@ companion-спеку `<stem>-spec.md` в [40-architecture/](../../40-architectur
 | [ADR-005](ADR-005-write-operations.md) | Контракт пишущих операций: предпросмотр и привязанное подтверждение | Draft |
 | [ADR-006](ADR-006-get-room-side-effect.md) | `get_room` — эмпирически мутирующий read, контракт предупреждения | Approved |
 | [ADR-007](ADR-007-create-meeting-path-correction.md) | Коррекция пути `create_meeting` на `/api/calendar` и дисциплина маркировки непроверенных экстраполяций | Proposed |
+| [ADR-008](ADR-008-write-auth-and-error-model.md) | Доп. заголовок `Authorization` на мутирующих операциях (гипотеза), `KTalkWriteAuthMismatchError`, тело 4xx-ответа как атрибут исключения | Draft |

@@ -18,6 +18,13 @@ from ktalk_mcp.auth import (  # noqa: F401 - реэкспорт публично
     AuthContext,
     AuthStatus,
     EndpointProfile,
+    KTalkAuthError,
+    KTalkError,
+    KTalkNotFoundError,
+    KTalkScopeError,
+    KTalkWriteAuthMismatchError,
+    OperationNotAvailableError,
+    classify_response,
     full_participants_apikey,
     merge_participants,
     normalize_list_apikey,
@@ -27,26 +34,6 @@ from ktalk_mcp.auth import (  # noqa: F401 - реэкспорт публично
 )
 from ktalk_mcp.config import AuthMode, Settings
 from ktalk_mcp.pagination import paginate_pages, skip_pages
-
-
-class KTalkError(Exception):
-    """Base error for KTalk API."""
-
-
-class KTalkAuthError(KTalkError):
-    """Session token or personal API key expired or invalid."""
-
-
-class KTalkScopeError(KTalkAuthError):
-    """API key valid, but lacks the required scope for the operation."""
-
-
-class KTalkNotFoundError(KTalkError):
-    """Recording not found."""
-
-
-class OperationNotAvailableError(KTalkError):
-    """Operation has no endpoint profile for the currently active auth mode."""
 
 
 class KTalkClient:
@@ -122,36 +109,9 @@ class KTalkClient:
         return profile
 
     def _classify(self, response: httpx.Response, required_scope: str | None) -> None:
-        if response.status_code == 401:
-            if self._auth.mode is AuthMode.API_KEY:
-                raise KTalkAuthError(
-                    "Ключ авторизации истёк или невалиден. "
-                    "Обновите KTALK_PERSONAL_API_KEY (см. README)."
-                )
-            raise KTalkAuthError(
-                "Токен сессии истёк или невалиден. Обновите KTALK_SESSION_TOKEN (см. README)."
-            )
-        if response.status_code == 403:
-            if self._auth.mode is AuthMode.API_KEY:
-                if required_scope:
-                    label = SCOPE_LABELS.get(required_scope, required_scope)
-                    raise KTalkScopeError(
-                        f"Ключу не хватает разрешения «{label}» ({required_scope}). "
-                        "Добавьте его ключу в настройках Толка (администратор домена)."
-                    )
-                raise KTalkAuthError("Доступ запрещён. Обратитесь к администратору Толка.")
-            # Session-режим: у токена нет понятия scope, но 403 — это не 401.
-            # Раньше оба кода давали одно сообщение «токен истёк», и пользователь,
-            # упёршийся в нехватку прав, шёл обновлять рабочий токен. Решение
-            # ADR-003: коды разводятся, потому что действия по ним разные.
-            raise KTalkAuthError(
-                "Доступ запрещён: у текущей сессии нет прав на эту операцию. "
-                "Токен при этом рабочий — обновлять его не нужно."
-            )
-        if response.status_code == 404:
-            raise KTalkNotFoundError("Ресурс не найден.")
-        if response.status_code >= 400:
-            raise KTalkError(f"Ошибка API Контур.Толк: HTTP {response.status_code}.")
+        """Логика вынесена в `auth.classify_response` (гейт C13) — не зависит от
+        `self`, только от режима/статус-кода/scope."""
+        classify_response(self._auth.mode, response, required_scope)
 
     async def _call(self, operation: str, params: dict) -> dict:
         profile = self._profile_for(operation)

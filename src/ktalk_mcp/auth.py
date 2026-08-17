@@ -37,6 +37,81 @@ OPERATION_LABELS = {
 }
 
 
+class KTalkError(Exception):
+    """Base error for KTalk API."""
+
+
+class KTalkAuthError(KTalkError):
+    """Session token or personal API key expired or invalid."""
+
+
+class KTalkScopeError(KTalkAuthError):
+    """API key valid, but lacks the required scope for the operation."""
+
+
+class KTalkWriteAuthMismatchError(KTalkAuthError):
+    """401/403 на операции, credential которой в ту же секунду подтверждён рабочим
+    независимой проверкой (ADR-008) — обновление токена не помогает."""
+
+
+class KTalkNotFoundError(KTalkError):
+    """Recording not found."""
+
+
+class OperationNotAvailableError(KTalkError):
+    """Operation has no endpoint profile for the currently active auth mode."""
+
+
+def _auth_error(message: str, status_code: int, cls: type[KTalkAuthError] = KTalkAuthError):
+    """ADR-008 §2: код ответа — отдельный атрибут исключения (`status_code`), читает
+    его `_status_hint` в `contour_diagnostics.py` без парсинга текста сообщения."""
+    exc = cls(message)
+    exc.status_code = status_code
+    return exc
+
+
+def classify_response(
+    mode: AuthMode, response: object, required_scope: str | None
+) -> None:
+    """Вынесено из `KTalkClient._classify` (гейт C13) — не зависит от `self`, только
+    от режима, статус-кода и требуемого scope. ADR-003: коды 401/403 разводятся по
+    смыслу (истёк vs. запрещён), ADR-008: код ответа — атрибут `status_code` на
+    исключении, читает `contour_diagnostics._status_hint`."""
+    status = response.status_code  # type: ignore[attr-defined]
+    if status == 401:
+        if mode is AuthMode.API_KEY:
+            raise _auth_error(
+                "Ключ авторизации истёк или невалиден. "
+                "Обновите KTALK_PERSONAL_API_KEY (см. README).",
+                401,
+            )
+        raise _auth_error(
+            "Токен сессии истёк или невалиден. Обновите KTALK_SESSION_TOKEN (см. README).", 401
+        )
+    if status == 403:
+        if mode is AuthMode.API_KEY:
+            if required_scope:
+                label = SCOPE_LABELS.get(required_scope, required_scope)
+                raise _auth_error(
+                    f"Ключу не хватает разрешения «{label}» ({required_scope}). "
+                    "Добавьте его ключу в настройках Толка (администратор домена).",
+                    403,
+                    KTalkScopeError,
+                )
+            raise _auth_error("Доступ запрещён. Обратитесь к администратору Толка.", 403)
+        # Session-режим: у токена нет понятия scope, но 403 — это не 401. Раньше оба
+        # кода давали одно сообщение «токен истёк» — ADR-003 разводит их по смыслу.
+        raise _auth_error(
+            "Доступ запрещён: у текущей сессии нет прав на эту операцию. "
+            "Токен при этом рабочий — обновлять его не нужно.",
+            403,
+        )
+    if status == 404:
+        raise KTalkNotFoundError("Ресурс не найден.")
+    if status >= 400:
+        raise KTalkError(f"Ошибка API Контур.Толк: HTTP {status}.")
+
+
 def quote_path_param(value: object) -> str:
     """SEC-001: квотирует значение перед подстановкой в `path_template.format(...)` —
     без этого "../" в recording_key/conference_key меняет фактический путь запроса
@@ -50,6 +125,7 @@ class EndpointProfile:
 
     path_template: str
     required_scope: str | None
+    mutating: bool = False  # ADR-008: session-режим шлёт доп. Authorization-заголовок
 
 
 # Таблица «операция × режим -> путь + scope» (FR-6). Отсутствие записи для режима
@@ -132,7 +208,10 @@ OPERATION_PROFILES: dict[str, dict[AuthMode, EndpointProfile | None]] = {
         # использует /calendar относительно него; предыдущая запись без /api была ошибкой
         # прочтения этого источника (ADR-007), не проверенным решением. Следующий боевой
         # POST под новой санкцией владельца — единственная проверка.
-        AuthMode.SESSION: EndpointProfile("/api/calendar", None),
+        # ГИПОТЕЗА (ADR-008, DEV-005 §5, не проверено живым POST): запись в session-режиме
+        # может требовать доп. заголовок Authorization: Session <token> — mutating=True
+        # добавляет его поверх query, не вместо. Следующий боевой POST — единственная проверка.
+        AuthMode.SESSION: EndpointProfile("/api/calendar", None, mutating=True),
         # ФАКТ (ADR-004 п.2): api-key не проверен вовсе -> fail-closed.
         AuthMode.API_KEY: None,
     },

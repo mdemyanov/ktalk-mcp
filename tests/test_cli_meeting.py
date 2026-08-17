@@ -89,6 +89,43 @@ def test_tri_bool_rejects_non_true_false_tokens():
         _tri_bool("1")
 
 
+# --- ADR-008: _print_error печатает response_body, маскирование не обходится -------------
+
+
+def test_print_error_without_response_body_prints_only_message(capsys):
+    from ktalk_mcp.cli_meeting import _print_error
+
+    _print_error("Ошибка X")
+
+    captured = capsys.readouterr()
+    assert "Ошибка X" in captured.err
+    assert "Тело ответа сервера" not in captured.err
+
+
+def test_print_error_with_response_body_appends_it_to_message(capsys):
+    from ktalk_mcp.cli_meeting import _print_error
+
+    _print_error("Ошибка X", "тело ответа сервера тут")
+
+    captured = capsys.readouterr()
+    assert "Ошибка X" in captured.err
+    assert "тело ответа сервера тут" in captured.err
+
+
+def test_print_error_masks_secret_inside_response_body(monkeypatch, capsys):
+    """NFR-10/SEC-001: `redact_secrets` маскирует секрет из активной переменной
+    окружения, даже если он оказался внутри `response_body`, не только в основном
+    тексте сообщения."""
+    monkeypatch.setenv("KTALK_SESSION_TOKEN", "super-secret-session-value")
+    monkeypatch.delenv("KTALK_PERSONAL_API_KEY", raising=False)
+    from ktalk_mcp.cli_meeting import _print_error
+
+    _print_error("Ошибка сети", "лог сервера содержит super-secret-session-value внутри")
+
+    captured = capsys.readouterr()
+    assert "super-secret-session-value" not in captured.err
+
+
 # --- Регистрация подкоманд ----------------------------------------------------------------
 
 

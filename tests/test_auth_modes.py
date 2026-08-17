@@ -214,3 +214,27 @@ def test_ac_nfr2_priority_order_across_four_env_combinations(monkeypatch):
     monkeypatch.delenv("KTALK_SESSION_TOKEN", raising=False)
     with pytest.raises(KTalkConfigError):
         _ = Settings().auth_mode
+
+
+# --- ADR-008: EndpointProfile.mutating -------------------------------------------------
+
+
+def test_endpoint_profile_mutating_defaults_to_false():
+    from ktalk_mcp.client import EndpointProfile
+
+    profile = EndpointProfile("/api/recordings", None)
+    assert profile.mutating is False
+
+
+def test_only_create_meeting_session_profile_is_mutating():
+    """ADR-008 §1: `mutating=True` — только у `create_meeting[AuthMode.SESSION]`,
+    ни одна другая запись таблицы не меняется по умолчанию."""
+    from ktalk_mcp.client import OPERATION_PROFILES
+    from ktalk_mcp.config import AuthMode
+
+    for operation, modes in OPERATION_PROFILES.items():
+        for mode, profile in modes.items():
+            if profile is None:
+                continue
+            expected = operation == "create_meeting" and mode is AuthMode.SESSION
+            assert profile.mutating is expected, (operation, mode)

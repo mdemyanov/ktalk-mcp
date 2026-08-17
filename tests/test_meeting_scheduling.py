@@ -211,6 +211,54 @@ async def test_create_meeting_logs_4xx_body_without_changing_user_message(
     assert "устройство роутинга: путь не смаршрутизирован" in caplog.text
 
 
+# --- ADR-008: заголовок Authorization на мутирующей операции session-режима ------------
+
+
+async def test_adr008_create_meeting_sends_authorization_header_additively(
+    httpx_mock: HTTPXMock, base_url, session_token
+):
+    """ADR-008 §1: `mutating=True` -> заголовок `Authorization: Session <token>`
+    отправляется ДОПОЛНИТЕЛЬНО к query-параметру `sessionToken`, не вместо него."""
+    from ktalk_mcp.client import KTalkClient
+    from ktalk_mcp.meeting_scheduling import create_meeting
+
+    httpx_mock.add_response(status_code=200, json={"id": "MEET-0001"})
+
+    async with KTalkClient(base_url=base_url, session_token=session_token) as client:
+        await create_meeting(client, {"subject": "X"})
+
+    request = httpx_mock.get_request()
+    assert request.headers.get("Authorization") == f"Session {session_token}"
+    assert request.url.params.get("sessionToken") == session_token
+
+
+async def test_adr008_401_with_working_control_raises_write_auth_mismatch_not_contour_drift(
+    httpx_mock: HTTPXMock, base_url, session_token
+):
+    """ADR-008: POST /api/calendar -> 401, контроль list_recordings(top=1) -> 200 —
+    `KTalkWriteAuthMismatchError`, не `ContourDriftError` (правка ADR-007 п.3)."""
+    from ktalk_mcp.client import KTalkClient, KTalkWriteAuthMismatchError
+    from ktalk_mcp.meeting_scheduling import create_meeting
+
+    httpx_mock.add_response(
+        status_code=401,
+        text="токен невалиден для этого пути",
+        url=re.compile(rf"^{re.escape(base_url)}/api/calendar(\?.*)?$"),
+    )
+    httpx_mock.add_response(
+        status_code=200,
+        json={"recordings": []},
+        url=re.compile(rf"^{re.escape(base_url)}/api/recordings(\?.*)?$"),
+    )
+
+    async with KTalkClient(base_url=base_url, session_token=session_token) as client:
+        with pytest.raises(KTalkWriteAuthMismatchError) as exc_info:
+            await create_meeting(client, {"subject": "X"})
+
+    assert exc_info.value.response_body == "токен невалиден для этого пути"
+    assert session_token not in str(exc_info.value)
+
+
 # --- NFR-7: fail-closed api-key ----------------------------------------------------------
 
 

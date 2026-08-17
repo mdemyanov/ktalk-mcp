@@ -85,8 +85,12 @@ def _meeting_kwargs(args: argparse.Namespace) -> dict:
     }
 
 
-def _print_error(message: str) -> None:
-    print(f"Ошибка: {redact_secrets(message)}", file=sys.stderr)
+def _print_error(message: str, response_body: str | None = None) -> None:
+    """ADR-008 §3: тело ответа сервера (если было прикреплено к исключению) печатается
+    вместе с основным текстом, тем же проходом `redact_secrets` — новой точки
+    маскирования не вводится."""
+    text = message if not response_body else f"{message}\nТело ответа сервера: {response_body}"
+    print(f"Ошибка: {redact_secrets(text)}", file=sys.stderr)
 
 
 async def _create_over_network(body: dict) -> dict:
@@ -144,7 +148,8 @@ def cmd_create_meeting_confirm(_reg, args: argparse.Namespace) -> int:
         _print_error(
             f"{exc} — исход неизвестен, проверьте `ktalk_list_calendar` перед повторной "
             "попыткой (повторный запуск create-meeting-confirm не выполняет автоматический "
-            "retry, NFR-9/RES-003 §3)."
+            "retry, NFR-9/RES-003 §3).",
+            getattr(exc, "response_body", None),
         )
         return 1
 
