@@ -156,6 +156,56 @@ async def test_get_room_any_non_2xx_with_working_control_raises_contour_drift_no
             await get_room(client, "room-that-does-not-exist-synthetic")
 
 
+def test_get_room_docstring_carries_adr006_side_effect_warning():
+    """ADR-006 §4.2 / DEV-003: докстрайн несёт безусловное предупреждение о
+    побочном эффекте — вызов с ранее не читанным именем создаёт комнату,
+    отменить нельзя, инструмент не годится для проверки занятости имени."""
+    from ktalk_mcp.rooms import get_room
+
+    doc = get_room.__doc__ or ""
+
+    assert "ADR-006" in doc
+    assert "создаёт объект" in doc or "создаёт комнату" in doc
+    assert "нельзя" in doc or "необратим" in doc
+    assert "занятост" in doc  # "занятости/свободности имени"
+
+
+async def test_ktalk_get_room_tool_description_carries_adr006_side_effect_warning():
+    """ADR-006 §4.3 / DEV-003: описание MCP-инструмента (видимое вызывающему
+    агенту) несёт то же предупреждение — важнее докстрайна, т.к. это видит
+    вызывающий."""
+    from ktalk_mcp.server import mcp
+
+    tools = await mcp.list_tools()
+    tools_by_name = {t.name: t for t in tools}
+    description = tools_by_name["ktalk_get_room"].description or ""
+
+    assert "ADR-006" in description
+    assert "side effect" in description.lower() or "creates" in description.lower()
+    assert "cannot" in description.lower() or "irreversib" in description.lower()
+    assert "occupan" in description.lower() or "availab" in description.lower()
+
+
+async def test_get_room_200_on_never_seen_name_is_not_treated_as_error(
+    httpx_mock: HTTPXMock, base_url, session_token
+):
+    """Контракт с QA-author (rooms-calendar-spec §«Контракт с QA-author»): 200
+    на ранее не встречавшееся имя — не ошибка/«не найдено», отдаётся как
+    обычный результат (живое поведение ADR-006, Ф-45/Ф-49)."""
+    from ktalk_mcp.client import KTalkClient
+    from ktalk_mcp.rooms import get_room
+
+    fresh_name = "probe-fresh-never-seen-in-this-contour"
+    fixture = _fixture_json("room-detail-session.json")
+    fixture["roomName"] = fresh_name
+    httpx_mock.add_response(json=fixture)
+
+    async with KTalkClient(base_url=base_url, session_token=session_token) as client:
+        room = await get_room(client, fresh_name)
+
+    assert room["roomName"] == fresh_name
+
+
 async def test_ktalk_get_room_mcp_tool_registered_with_room_name_required():
     """`ktalk_get_room` — новый MCP-инструмент (NFR-6: аддитивен, не заменяет
     существующие)."""

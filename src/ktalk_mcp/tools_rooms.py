@@ -19,6 +19,14 @@ def register(mcp: FastMCP) -> None:
     async def ktalk_get_room(room_name: str, format: str = "markdown") -> str:
         """Get room details (FR-17, session mode only — no confirmed API-key profile).
 
+        WARNING — SIDE EFFECT (ADR-006): the server returns 200 for any room
+        name, including one never seen before, with an identically shaped
+        response (never a 404). Calling this with a name not yet read in this
+        contour CREATES the room object as a side effect of reading; this is
+        irreversible — the project has no delete operation. Do NOT use this
+        tool to check whether a name is available/occupied — the check itself
+        creates the occupancy.
+
         Args:
             room_name: Room name (path-quoted before the request)
             format: Output format — "raw" (JSON) or "markdown"

@@ -13,3 +13,4 @@ companion-спеку `<stem>-spec.md` в [40-architecture/](../../40-architectur
 | [ADR-003](ADR-003-auth-modes.md) | Режимы авторизации и профили эндпоинтов | Draft |
 | [ADR-004](ADR-004-undocumented-contour.md) | Опора на недокументированный контур волны 2 и обнаружение его деградации | Draft |
 | [ADR-005](ADR-005-write-operations.md) | Контракт пишущих операций: предпросмотр и привязанное подтверждение | Draft |
+| [ADR-006](ADR-006-get-room-side-effect.md) | `get_room` — эмпирически мутирующий read, контракт предупреждения | Approved |

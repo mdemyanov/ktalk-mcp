@@ -10,3 +10,4 @@ edge case'ы покрыты, какие расхождения со спекой
 | [personal-api-key-dev-notes.md](personal-api-key-dev-notes.md) | Реализация ядра авторизации, диспетчера профиля эндпоинтов, диагностики и пагинации для эпика «персональный API-ключ» (0.5.0, DEV-001) |
 | [rooms-calendar-dev-a-notes.md](rooms-calendar-dev-a-notes.md) | Реализация комнаты/календаря/FR-19 (эпик «Комнаты, календарь, планирование», волна 2, DEV-A) |
 | [rooms-calendar-dev-b-notes.md](rooms-calendar-dev-b-notes.md) | Реализация планирования встречи FR-13 (эпик «Комнаты, календарь, планирование», волна 2, DEV-B) |
+| [rooms-calendar-dev-c1-notes.md](rooms-calendar-dev-c1-notes.md) | Предпросмотр боевой встречи без сети: доказательство нуля сетевых вызовов, состава полей тела и выдачи confirmation_id (боевая приёмка 0.6.0, DEV-001) |
