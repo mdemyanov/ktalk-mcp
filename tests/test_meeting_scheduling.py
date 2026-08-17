@@ -259,6 +259,41 @@ async def test_adr008_401_with_working_control_raises_write_auth_mismatch_not_co
     assert session_token not in str(exc_info.value)
 
 
+async def test_dev007_control_call_does_not_inherit_cookie_from_failed_post(
+    httpx_mock: HTTPXMock, base_url, session_token
+):
+    """DEV-007: `client.list_recordings(top=1)` (контроль ADR-004) обязан быть
+    независим от отказа, который он проверяет. `httpx.AsyncClient` без явной
+    зачистки копит `Set-Cookie` между запросами одного инстанса — POST на
+    `/api/calendar`, вернувший 401 вместе с cookie, поставил бы под сомнение
+    независимость контроля, если бы эта cookie улетела в следующий GET на том же
+    клиенте. Ровно этим объяснялась воспроизведённая расходимость: `auth-status`
+    (свежий клиент, без cookie) видел `alive: True`, а контроль внутри уже
+    отработавшего клиента иногда — нет."""
+    from ktalk_mcp.client import KTalkClient, KTalkWriteAuthMismatchError
+    from ktalk_mcp.meeting_scheduling import create_meeting
+
+    httpx_mock.add_response(
+        status_code=401,
+        headers={"Set-Cookie": "sid=stale-web-session; Path=/"},
+        text="",
+        url=re.compile(rf"^{re.escape(base_url)}/api/calendar(\?.*)?$"),
+    )
+    httpx_mock.add_response(
+        status_code=200,
+        json={"recordings": []},
+        url=re.compile(rf"^{re.escape(base_url)}/api/recordings(\?.*)?$"),
+    )
+
+    async with KTalkClient(base_url=base_url, session_token=session_token) as client:
+        with pytest.raises(KTalkWriteAuthMismatchError):
+            await create_meeting(client, {"subject": "X"})
+
+    requests = httpx_mock.get_requests()
+    control_request = next(r for r in requests if r.url.path == "/api/recordings")
+    assert "cookie" not in control_request.headers
+
+
 # --- NFR-7: fail-closed api-key ----------------------------------------------------------
 
 

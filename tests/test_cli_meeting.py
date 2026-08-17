@@ -298,3 +298,44 @@ def test_cli_create_meeting_confirm_network_failure_no_retry_exactly_one_attempt
     assert len(requests) == 2
     assert requests[0].method == "POST"
     assert requests[1].method == "GET"
+
+
+@pytest.mark.httpx_mock(assert_all_responses_were_requested=False)
+def test_cli_create_meeting_confirm_401_with_working_control_prints_adr008_message(
+    httpx_mock: HTTPXMock, monkeypatch, capsys
+):
+    """DEV-007: сквозной путь CLI (`cmd_create_meeting_confirm` -> `_print_error`)
+    ранее не был покрыт для HTTP-статусного отказа (только для `ConnectError` —
+    см. тест выше) — именно этот пробел пропустил дефект в бою. POST -> 401,
+    контроль (`list_recordings`) -> 200: пользователь должен увидеть сообщение
+    ADR-008 (`KTalkWriteAuthMismatchError`), не старый текст «Токен сессии истёк»,
+    и тело ответа сервера."""
+    import re
+
+    base_url = "https://test.ktalk.ru"
+    httpx_mock.add_response(
+        status_code=401,
+        text="тело ответа от /api/calendar",
+        url=re.compile(rf"^{re.escape(base_url)}/api/calendar(\?.*)?$"),
+    )
+    httpx_mock.add_response(
+        status_code=200,
+        json={"recordings": []},
+        url=re.compile(rf"^{re.escape(base_url)}/api/recordings(\?.*)?$"),
+    )
+
+    master_fd, slave_fd = _with_real_pty(monkeypatch, "да")
+    try:
+        rc = _run(
+            ["create-meeting-confirm", *_PREVIEW_ARGV_FULL[1:]], monkeypatch, base_url=base_url
+        )
+    finally:
+        os.close(master_fd)
+        os.close(slave_fd)
+
+    assert rc != 0
+    captured = capsys.readouterr()
+    assert "KTalkWriteAuthMismatchError" not in captured.err  # сообщение, не имя класса
+    assert "ADR-008" in captured.err
+    assert "Токен сессии истёк" not in captured.err
+    assert "тело ответа от /api/calendar" in captured.err

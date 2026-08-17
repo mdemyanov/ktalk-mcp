@@ -59,6 +59,13 @@ class KTalkClient:
         self._auth = AuthContext.resolve(
             session_token=session_token, personal_api_key=personal_api_key
         )
+        # Авторизация в этом клиенте — только заголовок/query (ADR-003), cookie-jar
+        # нигде не читается. Без явной зачистки httpx.AsyncClient по умолчанию копит
+        # Set-Cookie между запросами одного инстанса (httpx не даёт конструктору
+        # флага "без cookie" — `cookies=` принимает jar/dict, не bool) — контрольный
+        # вызов ADR-004/diagnose_undocumented_failure после проваленного мутирующего
+        # POST унаследовал бы cookie именно этого провала (DEV-007), теряя
+        # независимость диагностики от отказа, который она проверяет.
         if self._auth.mode is AuthMode.API_KEY:
             self._client = httpx.AsyncClient(
                 base_url=base_url,
@@ -71,6 +78,14 @@ class KTalkClient:
                 params={"sessionToken": self._auth.credential},
                 timeout=30.0,
             )
+        # Хук ставится после конструирования — сам себе замыкание на `self._client`,
+        # httpx извлекает Set-Cookie до вызова response-хуков (`Cookies.extract_cookies`
+        # в `_send_single_request` отрабатывает раньше), поэтому зачистка здесь не
+        # мешает уже полученному ответу — снимает cookie только со следующего запроса.
+        self._client.event_hooks["response"] = [self._forget_response_cookies]
+
+    async def _forget_response_cookies(self, _response: httpx.Response) -> None:
+        self._client.cookies.clear()
 
     @classmethod
     def from_settings(cls, settings: Settings) -> KTalkClient:
