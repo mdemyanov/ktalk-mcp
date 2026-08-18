@@ -18,6 +18,7 @@ from ktalk_mcp.cli_meeting import (
 from ktalk_mcp.cli_meeting import register_subparsers as register_meeting_subparsers
 from ktalk_mcp.cli_sync import cmd_auth_status, cmd_sync
 from ktalk_mcp.config import redact_secrets, resolve_db_path
+from ktalk_mcp.host_config import HostConfig, discover_host_config
 from ktalk_mcp.registry import Registry, migrate_from_vault, render_markdown_mirror
 
 _STATUSES = ("new", "processing", "done", "skipped", "partial")
@@ -78,6 +79,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_auth = sub.add_parser("auth-status", help="Диагностика авторизации (FR-11)")
     p_auth.add_argument("--json", action="store_true")
+
+    p_config = sub.add_parser("config", help="Конфигурация проекта-хозяина (.ktalk.toml)")
+    config_sub = p_config.add_subparsers(dest="config_command")
+    p_config_show = config_sub.add_parser("show", help="Показать резолвленный .ktalk.toml")
+    p_config_show.add_argument("--json", action="store_true")
 
     register_meeting_subparsers(sub)
     register_contacts_subparsers(sub)
@@ -210,8 +216,44 @@ def _cmd_migrate(reg: Registry, args) -> int:
     return 0
 
 
+def _host_config_to_dict(host_config: HostConfig | None) -> dict:
+    if host_config is None:
+        return {"registry": {}, "directories": {}, "routing": {}, "integrations": {}}
+    return {
+        "registry": host_config.registry,
+        "directories": host_config.directories,
+        "routing": host_config.routing,
+        "integrations": host_config.integrations,
+    }
+
+
+def _cmd_config(reg: Registry | None, args) -> int:
+    if getattr(args, "config_command", None) != "show":
+        print("Неизвестная подкоманда config (доступно: show)", file=sys.stderr)
+        return 2
+    host_config = discover_host_config()
+    data = _host_config_to_dict(host_config)
+    if args.json:
+        _print_json(data)
+        return 0
+    print("# Конфигурация проекта-хозяина (.ktalk.toml)\n")
+    if host_config is None:
+        print("(конфиг не найден — машинные дефолты)")
+        return 0
+    for section_name in ("registry", "directories", "routing", "integrations"):
+        section = data[section_name]
+        print(f"## {section_name}")
+        if not section:
+            print("(не объявлено)")
+        else:
+            for key, value in section.items():
+                print(f"- {key} = {value}")
+    return 0
+
+
 _REGISTRY_FREE_COMMANDS = {
     "auth-status",
+    "config",
     "create-meeting-preview",
     "create-meeting-confirm",
     "cancel-meeting-preview",
@@ -233,6 +275,7 @@ _HANDLERS = {
     "migrate": _cmd_migrate,
     "sync": cmd_sync,
     "auth-status": cmd_auth_status,
+    "config": _cmd_config,
     "create-meeting-preview": cmd_create_meeting_preview,
     "create-meeting-confirm": cmd_create_meeting_confirm,
     "cancel-meeting-preview": cmd_cancel_meeting_preview,

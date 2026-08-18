@@ -19,3 +19,5 @@ companion-спеку `<stem>-spec.md` в [40-architecture/](../../40-architectur
 | [ADR-009](ADR-009-devtools-body-and-transport-correction.md) | Коррекция тела и транспорта `create_meeting` по браузерному снимку DevTools (14 полей, `X-Platform`, `requiredAttendees`) | Draft |
 | [ADR-010](ADR-010-contacts-resolution.md) | Резолюция участника встречи через справочник контактов (`GET /api/contacts`) — пересматривает ADR-009 §3 | Draft |
 | [ADR-011](ADR-011-meeting-cancel-update.md) | Контракт отмены встречи (`POST /calendar/{id}/cancel`), подтверждение привязано к (операция, id, reason); правка (`PUT`) отложена до измерения тела | Draft |
+| [ADR-012](ADR-012-plugin-boundary.md) | Границы плагина ktalk: три дома артефактов, плагин как тонкая обёртка над `uv tool`, cutover агентов, отдельный репозиторий | Draft |
+| [ADR-013](ADR-013-central-transcript-store.md) | Централизованное машинное хранилище транскриптов: корень, раскладка, приоритет пути, конкурентный доступ, облачная синхронизация, права, миграция | Proposed |

@@ -11,6 +11,7 @@ title: Архитектура
 | Спека | К какому решению |
 |-------|------------------|
 | [ADR-001-nauta-contour-spec.md](ADR-001-nauta-contour-spec.md) | Калибровка гейтов объёма для [ADR-001](../00-project/adr/ADR-001-nauta-contour.md) |
+| [ADR-013-central-transcript-store-spec.md](ADR-013-central-transcript-store-spec.md) | Companion-спека к [ADR-013](../00-project/adr/ADR-013-central-transcript-store.md): разрешение пути, детекция облачной синхронизации, контракт теста конкурентного доступа, контракт миграции, брифы Dev/DevOps, контракт QA-author (0.7.0) |
 
 ## Самостоятельные архитектурные статьи
 
@@ -31,3 +32,6 @@ title: Архитектура
 | [ADR-010-contacts-resolution-spec.md](ADR-010-contacts-resolution-spec.md) | Companion-спека к [ADR-010](../00-project/adr/ADR-010-contacts-resolution.md): `search_contacts`, `GET /api/contacts`, контракт 0/1/>1 совпадений, брифы Dev/DevOps, контракт QA-author (SA-010) |
 | [ADR-011-meeting-cancel-update-spec.md](ADR-011-meeting-cancel-update-spec.md) | Companion-спека к [ADR-011](../00-project/adr/ADR-011-meeting-cancel-update.md): модуль `meeting_cancel.py`, профиль `cancel_meeting`, привязка подтверждения к (операция, id, reason), брифы Dev/DevOps, контракт QA-author (SA-011) |
 | [at-design-contacts-and-cancel.md](at-design-contacts-and-cancel.md) | Тест-дизайн и failing stubs для QA-010: резолюция контактов (ADR-010) и отмена встречи (ADR-011) — таблица AC → тест-функция, boundary/error cases, допущения для Dev |
+| [ADR-012-plugin-boundary-spec.md](ADR-012-plugin-boundary-spec.md) | Companion-спека к [ADR-012](../00-project/adr/ADR-012-plugin-boundary.md): полная таблица трёх домов (11 файлов + данные), контракт `.mcp.json`/`plugin.json`, cutover-процедура агентов, брифы Dev/DevOps, контракт QA-author (SA-001, волна 3) |
+| [ktalk-plugin-spec.md](ktalk-plugin-spec.md) | Конфигурация проекта-хозяина (SA-003, волна 3): формат `.ktalk.toml`, discovery, маршрутизация артефактов как конфигурация, контракт деградации (FR-24), миграция vault'а `naumen-cto`, брифы Dev/DevOps, контракт QA-author |
+| [at-design-ktalk-plugin.md](at-design-ktalk-plugin.md) | Тест-дизайн и failing stubs для волны 3 (0.7.0, QA-001): discovery `.ktalk.toml` (FR-20), приоритет разрешения пути (FR-23), работа без vault-раскладки (FR-21), машинный дефолт хранилища/облачная синхронизация/права (FR-22, NFR-14, NFR-15), миграция (NFR-12), конкурентный доступ (NFR-13), `ktalk config show` — таблица AC → тест-функция, что не покрыто автоматически и почему |

@@ -1,11 +1,13 @@
 import os
 from enum import Enum
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-DEFAULT_DB_PATH = "95_TRANSCRIPTS/.registry.db"
+if TYPE_CHECKING:
+    from ktalk_mcp.host_config import HostConfig
 
 
 class AuthMode(str, Enum):
@@ -19,14 +21,36 @@ class KTalkConfigError(Exception):
     """Ни KTALK_PERSONAL_API_KEY, ни KTALK_SESSION_TOKEN не заданы."""
 
 
-def resolve_db_path(cli_db: str | None = None) -> Path:
-    """Resolve the registry DB path: --db flag > KTALK_REGISTRY_DB env > default."""
+def resolve_db_path(
+    cli_db: str | None = None, host_config: "HostConfig | None" = None
+) -> Path:
+    """Resolve the registry DB path (ADR-013 §3, расширено волной 3):
+
+    `--db` > `KTALK_REGISTRY_DB` > `host_config.registry.db_path` (SA-003,
+    discovery выполняется вызывающей стороной — `resolve_db_path` только
+    использует уже готовый `HostConfig`) > машинный дефолт централизованного
+    хранилища (`store.resolve_store_root`, FR-22).
+
+    Старый относительный дефолт `95_TRANSCRIPTS/.registry.db` (ADR-002) заменён
+    машинным дефолтом вне cwd (ADR-013) — единственный оставшийся источник
+    относительного пути в этой функции теперь `host_config`, если проект-хозяин
+    явно объявляет относительный `registry.db_path`.
+    """
     if cli_db:
         return Path(cli_db)
     env = os.environ.get("KTALK_REGISTRY_DB")
     if env:
         return Path(env)
-    return Path(DEFAULT_DB_PATH)
+    if host_config is not None:
+        configured = host_config.registry.get("db_path")
+        if configured:
+            return Path(configured)
+
+    from ktalk_mcp.store import resolve_store_root, warn_if_sync_dir
+
+    path = resolve_store_root() / "registry.db"
+    warn_if_sync_dir(path)
+    return path
 
 
 class Settings(BaseSettings):
