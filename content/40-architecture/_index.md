@@ -12,6 +12,7 @@ title: Архитектура
 |-------|------------------|
 | [ADR-001-nauta-contour-spec.md](ADR-001-nauta-contour-spec.md) | Калибровка гейтов объёма для [ADR-001](../00-project/adr/ADR-001-nauta-contour.md) |
 | [ADR-013-central-transcript-store-spec.md](ADR-013-central-transcript-store-spec.md) | Companion-спека к [ADR-013](../00-project/adr/ADR-013-central-transcript-store.md): разрешение пути, детекция облачной синхронизации, контракт теста конкурентного доступа, контракт миграции, брифы Dev/DevOps, контракт QA-author (0.7.0) |
+| [ADR-014-onboarding-spec.md](ADR-014-onboarding-spec.md) | Companion-спека к [ADR-014](../00-project/adr/ADR-014-sanctioned-onboarding.md): контракт команд и кодов возврата `ktalk-onboard.sh`, схемы `onboarding.toml`/`compat.json`, определение версии, классификация ошибок установки, врезка для промтов, брифы Dev, контракт QA (волна 4) |
 
 ## Самостоятельные архитектурные статьи
 
