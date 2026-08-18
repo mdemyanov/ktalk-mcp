@@ -59,6 +59,12 @@ def sanction_path() -> Path:
 def _read_raw() -> dict:
     path = sanction_path()
     try:
+        mode = path.stat().st_mode
+        # SEC-006: права шире 0600 читаются как «санкции нет». Это не защита от
+        # владельца учётной записи (он и так может переписать файл), а защита от
+        # другого пользователя машины, которому файл стал доступен на запись.
+        if mode & 0o077:
+            return {}
         with path.open("rb") as handle:
             data = tomllib.load(handle)
     except (OSError, tomllib.TOMLDecodeError, ValueError):

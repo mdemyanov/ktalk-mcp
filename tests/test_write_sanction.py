@@ -219,3 +219,18 @@ def test_injection_like_subject_does_not_change_body_or_sanction():
     assert body["subject"] == hostile
     assert not any("санкц" in str(key).lower() for key in body)
     assert write_sanction.read_state("create_meeting").status == "absent"
+
+
+def test_world_writable_sanction_file_reads_as_absent():
+    """SEC-006: права шире 0600 — санкции нет. Защита не от владельца учётной записи
+    (он файл и так перепишет), а от другого пользователя машины."""
+    import os
+
+    from ktalk_mcp import write_sanction
+
+    write_sanction.grant("create_meeting", hours=8, operations=3)
+    assert write_sanction.read_state("create_meeting").status == "active"
+
+    os.chmod(write_sanction.sanction_path(), 0o666)
+
+    assert write_sanction.read_state("create_meeting").status == "absent"
