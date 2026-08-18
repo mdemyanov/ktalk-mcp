@@ -8,72 +8,26 @@
 Вывод, потом обоснование; без преамбул, повторов и похвалы. Нет факта — так и
 сказать. Правило действует всегда и приоритетнее привычки к развёрнутости.
 
-## Stack
-- Python 3.12+, fastmcp, httpx, pydantic-settings, stdlib sqlite3 + argparse
-
 ## Entry points
 - `ktalk-mcp = ktalk_mcp.server:main` — MCP-сервер (контент: транскрипты, саммари)
 - `ktalk = ktalk_mcp.cli:main` — CLI реестра (механика: sync/дедуп/статусы/экспорт)
 
 ## Commands
-- `uv run ktalk-mcp` — запуск MCP-сервера
-- `uv run ktalk <команда>` — CLI реестра (`sync` [`--dry-run`], `auth-status`, `dashboard`,
-  `list`, `show`, `mark-processing/done/partial/skipped`, `set-vault-id`, `export`, `migrate`)
-  плюс планирование: `create-meeting-preview`, `create-meeting-confirm` (только TTY)
-- `uv run pytest` — тесты
-- `uv run pytest tests/test_formatters.py -v` — тесты форматтеров
-- `uv run ruff check .` — линтинг
-- `uv run ruff check . --fix` — автоисправление
 - `bash scripts/check.sh --fast` — гейты контура (тот же прогон, что на pre-commit)
 
 ## Architecture
-Один пакет `ktalk_mcp`, общие `client.py`/`config.py` для MCP и CLI:
-- `server.py` — bootstrap FastMCP + `ktalk_auth_status`, entry point
-- `tools_recordings.py` / `tools_meetings.py` / `tools_rooms.py` / `tools_scheduling.py` —
-  MCP tools (13 штук). Мутирующего инструмента нет: планирование отдаёт только предпросмотр
-- `rooms.py` / `calendar_reader.py` — чтение комнаты; чтение календаря с клиентской нарезкой
-  окна (сервер ограничивает запрос 7 днями, потолок сегмента — 100 элементов, `skip` не работает)
-- `meeting_body.py` / `confirmation.py` / `meeting_scheduling.py` / `cli_meeting.py` —
-  пишущая операция (ADR-005): allow-list компоновщик тела, токен подтверждения, POST, CLI
-- `contour_diagnostics.py` — корреляционная диагностика недокументированного контура (ADR-004)
-- `cli.py` — CLI: argparse-подкоманды, вывод (`--json` для машинного чтения);
-  `_REGISTRY_FREE_COMMANDS` — команды, не открывающие БД (`auth-status`, планирование)
-- `cli_sync.py` — команды `sync` (вкл. `--dry-run`) и `auth-status`
-- `registry.py` — SQLite-слой: схема (WAL), CRUD, дедуп, экспирация, миграция
-  из markdown, рендер markdown-зеркала, мапперы API → строки
-- `client.py` — KTalkClient, async httpx обёртка; единая точка диспетчеризации
-- `auth.py` — таблица `OPERATION_PROFILES` (операция × режим → путь + scope + нормализатор),
-  `AuthContext`, нормализаторы ответов, квотирование path-параметров
-- `pagination.py` — единый итератор страниц + клиентское окно дат (`clip_to_window`)
-- `enrichment.py` / `download.py` / `reconciliation.py` — дообогащение участников,
-  потоковое скачивание, сверка идентификаторов перед первым api-key sync
-- `formatters.py` — JSON → markdown конвертеры для каждого типа ответа
-- `config.py` — Settings из env; `resolve_db_path`
-  (KTALK_REGISTRY_DB / `--db` / дефолт `95_TRANSCRIPTS/.registry.db`)
+Один пакет `ktalk_mcp`, общие `client.py`/`config.py` для MCP и CLI.
+- Мутирующего MCP-инструмента нет: планирование отдаёт только предпросмотр (ADR-005)
+- Пути API живут в таблице `OPERATION_PROFILES` (`auth.py`), не хардкодом в методах —
+  набор путей зависит от режима авторизации
+- `calendar_reader.py`: окно календаря режется клиентом (сервер лимитирует 7 днями,
+  потолок сегмента 100, `skip` не работает)
+- `cli.py`: `_REGISTRY_FREE_COMMANDS` — команды, не открывающие БД
+- `contour_diagnostics.py` — диагностика недокументированного контура (ADR-004)
 
 ## API Reference
-- OpenAPI спецификация (справочник, **есть расхождения с реальностью**): `talk.public.api-api-2.json`
-- Base URL: https://your-domain.ktalk.ru
-- **Два режима авторизации** (решение — [ADR-003](content/00-project/adr/ADR-003-auth-modes.md)):
-  `KTALK_PERSONAL_API_KEY` → заголовок `X-Auth-Token`; иначе `KTALK_SESSION_TOKEN` →
-  query `sessionToken=`. Ключ побеждает; при обоих заданных session-токен не читается.
-- **Набор путей зависит от режима** — интеграторский контур (`/api/Domain/*`, `/api/Recordings/*`,
-  `/api/ConferenceReports/*`) отдаёт 401/403 по сессии, поэтому пути живут в таблице профилей
-  `auth.py`, а не хардкодом в методах.
-- Session-контур: `GET /api/recordings`, `/api/recordings/{id}`, `/api/conferencesHistory/{key}`
-- Общее для обоих: `/api/recordings/{key}/transcript`, `/api/recordings/v2/{key}/summary`,
-  `/api/recordings/{key}/summary/{type}`
-
-### Поведение API, проверенное эмпирически (спеке здесь верить нельзя)
-- `top` максимум **100**, не 1000: `400 «The field Top must be between 1 and 100»`.
-- `nextPageToken` во внутреннем контуре **не существует** — пагинация только через `skip`.
-- `startFrom`/`startTo` **игнорируются**: окно дат обеспечивает клиент (`clip_to_window`),
-  обход прекращается на первой странице за порогом. Выдача отсортирована от новых к старым.
-- `maxParticipantCount` в списке имеет максимум 10 и дефолт 6 — полный состав участников
-  берётся дообогащением по каждой записи, а не из списка.
-- Чат требует необъявленный в спеке параметр `channel` (рабочее значение `general`).
-- **401 ≠ 403**: 401 — ключ/токен невалиден, 403 — валиден, но не хватает scope. Тело 403
-  обычно пустое, диагностика строится на коде ответа и требуемом scope операции.
+Контракты, режимы авторизации и эмпирика поведения API (спеке верить нельзя) —
+в `src/ktalk_mcp/CLAUDE.md`, грузится при работе с файлами под `src/`.
 
 ## Conventions
 - Async everywhere (httpx, fastmcp)
