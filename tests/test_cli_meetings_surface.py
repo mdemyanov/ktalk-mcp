@@ -62,45 +62,75 @@ def test_ac_32_1b_list_calendar_requires_start_and_end_no_silent_default():
         parser.parse_args(["list-calendar"])
     with pytest.raises(SystemExit):
         parser.parse_args(["list-calendar", "--start", "2026-08-01"])
-    assert False, (
-        "TODO: AC-32-1b — оба вызова parse_args должны поднимать SystemExit "
-        "(argparse required), не подставлять дефолтный период; дописать "
-        "позитивную ветку (--start и --end оба переданы -> не SystemExit)"
-    )
+    # Позитивная ветка: оба обязательных флага переданы -> parse_args не падает.
+    args = parser.parse_args(["list-calendar", "--start", "2026-08-01", "--end", "2026-08-02"])
+    assert args.start == "2026-08-01"
+    assert args.end == "2026-08-02"
 
 
 def test_ac_32_2_list_calendar_json_preserves_incomplete_segments_verbatim(
     httpx_mock: HTTPXMock, monkeypatch, capsys
 ):
-    assert False, (
-        "TODO: AC-32-2 — замокать get_calendar_window (или сеть) так, чтобы "
-        "результат содержал непустой incomplete_segments; вызвать "
-        "list-calendar --start --end --json; распарсить stdout как JSON; "
-        "assert данные['incomplete_segments'] равен исходному списку дословно "
-        "(не пустой, не булев флаг)"
+    # 100 элементов на один сегмент == потолок _PAGE_SIZE -> сегмент помечается
+    # неполным (calendar_reader._fetch_segment: `len(items) >= _PAGE_SIZE`).
+    items = [
+        {"id": f"item-{i}", "roomName": "room-a", "start": "2026-08-01T10:00:00Z"}
+        for i in range(100)
+    ]
+    httpx_mock.add_response(json={"items": items})
+
+    rc = _run(
+        ["list-calendar", "--start", "2026-08-01", "--end", "2026-08-02", "--json"], monkeypatch
     )
+
+    assert rc == 0
+    captured = capsys.readouterr()
+    data = json.loads(captured.out)
+    assert data["incomplete_segments"] == [["2026-08-01", "2026-08-02"]]
 
 
 def test_ac_32_3_empty_items_success_vs_error_are_distinguishable_by_exit_code_and_channel(
     httpx_mock: HTTPXMock, monkeypatch, capsys
 ):
-    assert False, (
-        "TODO: AC-32-3 — два прогона: (1) мок пустого календаря -> rc==0, "
-        "stdout валиден как JSON с items==[], stderr пуст; (2) мок сетевой "
-        "ошибки -> rc==1, stderr содержит 'Ошибка:', stdout пуст. Доказать, "
-        "что (rc, channel) различают исходы, не текст 'встреч нет'"
+    httpx_mock.add_response(json={"items": []})
+    rc_ok = _run(
+        ["list-calendar", "--start", "2026-08-01", "--end", "2026-08-02", "--json"], monkeypatch
     )
+    ok_captured = capsys.readouterr()
+
+    assert rc_ok == 0
+    data = json.loads(ok_captured.out)
+    assert data["items"] == []
+    assert ok_captured.err == ""
+
+    httpx_mock.add_exception(httpx.ConnectError("boom"))
+    # ADR-007: контрольный GET (diagnose_undocumented_failure -> list_recordings)
+    # срабатывает после падения основного запроса — без мока он "не ожидаемый".
+    httpx_mock.add_response(json={"items": []})
+    rc_err = _run(
+        ["list-calendar", "--start", "2026-08-01", "--end", "2026-08-02", "--json"], monkeypatch
+    )
+    err_captured = capsys.readouterr()
+
+    assert rc_err == 1
+    assert "Ошибка:" in err_captured.err
+    assert err_captured.out == ""
+
+    assert (rc_ok, rc_err) == (0, 1)
 
 
 def test_list_calendar_malformed_start_date_fails_closed_not_traceback(
     httpx_mock: HTTPXMock, monkeypatch, capsys
 ):
-    assert False, (
-        "TODO: испорченный ввод — list-calendar --start 2026-13-45 --end "
-        "2026-08-20 --json; ожидание: rc==1, 'Ошибка:' на stderr, ни один из "
-        "потоков не содержит 'Traceback' (ValueError пойман _run, не утёк "
-        "необработанным)"
+    rc = _run(
+        ["list-calendar", "--start", "2026-13-45", "--end", "2026-08-20", "--json"], monkeypatch
     )
+
+    assert rc == 1
+    captured = capsys.readouterr()
+    assert "Ошибка:" in captured.err
+    assert "Traceback" not in captured.err
+    assert "Traceback" not in captured.out
 
 
 # === FR-34 — cancel-meeting-preview / -confirm =============================================
@@ -109,12 +139,16 @@ def test_list_calendar_malformed_start_date_fails_closed_not_traceback(
 def test_ac_34_1b_cancel_meeting_preview_zero_network_echoes_id_and_reason(
     httpx_mock: HTTPXMock, monkeypatch, capsys
 ):
-    assert False, (
-        "TODO: AC-34-1b — cancel-meeting-preview --id abc123== --reason "
-        "'встреча переносится'; assert rc==0, httpx_mock.get_requests()==[], "
-        "вывод содержит 'abc123==' и 'встреча переносится' дословно (эхо, "
-        "не изобретённые значения)"
+    rc = _run(
+        ["cancel-meeting-preview", "--id", "abc123==", "--reason", "встреча переносится"],
+        monkeypatch,
     )
+
+    assert rc == 0
+    assert httpx_mock.get_requests() == []
+    captured = capsys.readouterr()
+    assert "abc123==" in captured.out
+    assert "встреча переносится" in captured.out
 
 
 def test_ac_34_1c_cancel_meeting_commands_reject_json_flag():
@@ -166,38 +200,50 @@ def test_ac_34_2b_cancel_meeting_id_is_required_on_both_subcommands():
         parser.parse_args(["cancel-meeting-preview"])
     with pytest.raises(SystemExit):
         parser.parse_args(["cancel-meeting-confirm"])
-    assert False, (
-        "TODO: AC-34-2b — оба parse_args без --id должны падать SystemExit "
-        "(argparse required=True на --id, cli_meeting.py::_add_cancel_args); "
-        "дописать позитивную ветку (--id передан -> не SystemExit на этом поле)"
-    )
+    # Позитивная ветка: --id передан -> parse_args не падает на этом поле.
+    args_preview = parser.parse_args(["cancel-meeting-preview", "--id", "abc123=="])
+    assert args_preview.id == "abc123=="
+    args_confirm = parser.parse_args(["cancel-meeting-confirm", "--id", "abc123=="])
+    assert args_confirm.id == "abc123=="
 
 
 def test_nfr23_cancel_meeting_confirm_refuses_without_tty(
     httpx_mock: HTTPXMock, monkeypatch, capsys
 ):
-    assert False, (
-        "TODO: NFR-23-b — под pytest sys.stdin/stdout уже не TTY; вызвать "
-        "cancel-meeting-confirm --id abc123==; assert rc!=0, "
-        "httpx_mock.get_requests()==[], текст (stdout+stderr) содержит "
-        "'терминал' (регистронезависимо) — тот же приём, что "
-        "test_cli_meeting.py::test_cli_create_meeting_confirm_refuses_when_not_a_tty"
-    )
+    assert sys.stdin.isatty() is False
+    assert sys.stdout.isatty() is False
+
+    rc = _run(["cancel-meeting-confirm", "--id", "abc123=="], monkeypatch)
+
+    assert rc != 0
+    assert httpx_mock.get_requests() == []
+    captured = capsys.readouterr()
+    assert "терминал" in (captured.out + captured.err).lower()
 
 
 def test_nfr22_cancel_meeting_confirm_network_failure_no_retry_exactly_one_post(
-    httpx_mock: HTTPXMock, monkeypatch
+    httpx_mock: HTTPXMock, monkeypatch, capsys
 ):
-    assert False, (
-        "TODO: NFR-22 (cancel, CLI-уровень) — реальный pty (_with_real_pty, "
-        "ввод 'да'), httpx_mock.add_exception(httpx.ConnectError(...)) на "
-        "POST .../cancel; вызвать cancel-meeting-confirm --id abc123==; "
-        "assert rc!=0, ровно один POST-запрос среди httpx_mock.get_requests() "
-        "(не два и не ноль), текст называет 'исход неизвестен' и "
-        "'list-calendar' / 'list_calendar' — тот же паттерн, что "
-        "test_cli_create_meeting_confirm_network_failure_no_retry_exactly_one_attempt "
-        "в test_cli_meeting.py, применённый к cancel"
-    )
+    master_fd, slave_fd = _with_real_pty(monkeypatch, "да")
+    httpx_mock.add_exception(httpx.ConnectError("connection refused"))
+    httpx_mock.add_exception(httpx.ConnectError("connection refused"))
+
+    try:
+        rc = _run(["cancel-meeting-confirm", "--id", "abc123=="], monkeypatch)
+    finally:
+        os.close(master_fd)
+        os.close(slave_fd)
+
+    assert rc != 0
+    requests = httpx_mock.get_requests()
+    post_requests = [r for r in requests if r.method == "POST"]
+    assert len(post_requests) == 1
+    # sys.stdout подменён реальным pty (см. _with_real_pty) — capsys видит только
+    # stderr, туда `_print_error` пишет сообщение (тот же приём, что
+    # test_cli_create_meeting_confirm_401_with_working_control_prints_adr008_message).
+    err = capsys.readouterr().err
+    assert "исход неизвестен" in err
+    assert "list-calendar" in err or "list_calendar" in err
 
 
 # === FR-35 — search-contacts (известное расхождение) ========================================
@@ -268,31 +314,36 @@ def test_get_room_has_no_availability_check_flag():
     parser = build_parser()
     args = parser.parse_args(["get-room", "some-room", "--json"])
     known_flags = vars(args).keys()
-    assert False, (
-        "TODO: AC-36-2 (структурная опора) — assert ни один из известных "
-        "флагов get-room ('check', 'available', 'exists', 'occupied') не "
-        "присутствует в vars(args) — get-room физически не предлагает "
-        "проверку занятости имени (ADR-006 п.5); known_flags = "
-        f"{sorted(known_flags)!r} — использовать этот список в финальном ассерте"
+    assert not {"check", "available", "exists", "occupied"} & set(known_flags), (
+        f"get-room не должен предлагать проверку занятости имени (ADR-006 п.5); "
+        f"known_flags={sorted(known_flags)!r}"
     )
 
 
 def test_get_room_json_flag_prints_valid_json_room_payload(
     httpx_mock: HTTPXMock, monkeypatch, capsys
 ):
-    assert False, (
-        "TODO: замокать get_room (или сеть /api/rooms/{name}) на успешный "
-        "ответ; вызвать get-room test-room-alpha --json; распарсить stdout "
-        "как JSON; assert rc==0, имя комнаты 'test-room-alpha' присутствует "
-        "где-то в распарсенных данных"
-    )
+    httpx_mock.add_response(json={"roomName": "test-room-alpha"})
+
+    rc = _run(["get-room", "test-room-alpha", "--json"], monkeypatch)
+
+    assert rc == 0
+    captured = capsys.readouterr()
+    data = json.loads(captured.out)
+    assert "test-room-alpha" in json.dumps(data, ensure_ascii=False)
 
 
 def test_get_room_error_goes_to_stderr_not_stdout(httpx_mock: HTTPXMock, monkeypatch, capsys):
-    assert False, (
-        "TODO: замокать get_room на исключение (сеть/авторизация); вызвать "
-        "get-room test-room-alpha; assert rc==1, 'Ошибка:' в stderr, stdout пуст"
-    )
+    httpx_mock.add_exception(httpx.ConnectError("boom"))
+    # ADR-007: контрольный GET (diagnose_undocumented_failure -> list_recordings).
+    httpx_mock.add_response(json={"items": []})
+
+    rc = _run(["get-room", "test-room-alpha"], monkeypatch)
+
+    assert rc == 1
+    captured = capsys.readouterr()
+    assert "Ошибка:" in captured.err
+    assert captured.out == ""
 
 
 # === FR-37/FR-38 — деградация и эскалация (сквозные) =========================================
@@ -312,17 +363,20 @@ def test_get_room_error_goes_to_stderr_not_stdout(httpx_mock: HTTPXMock, monkeyp
 def test_ac_37_1_cli_error_text_passthrough_not_replaced_by_generic_message(
     argv, httpx_mock: HTTPXMock, monkeypatch, capsys
 ):
-    assert False, (
-        "TODO: AC-37-1 — для каждой команды из argv замокать нижележащий "
-        "вызов (клиент/get_room/search_contacts) так, чтобы он бросал "
-        "RuntimeError('сообщение сервера, уникальное для этого прогона'); "
-        "вызвать CLI; assert исходный текст присутствует ДОСЛОВНО в "
-        "(stdout+stderr) (после redact_secrets — секретов в фикстуре нет, "
-        "текст не тронут), не заменён на общее 'что-то пошло не так'"
-    )
+    unique_message = "сообщение сервера, уникальное для этого прогона"
+    httpx_mock.add_exception(RuntimeError(unique_message))
+
+    rc = _run(argv, monkeypatch)
+
+    assert rc != 0
+    captured = capsys.readouterr()
+    text = captured.out + captured.err
+    assert unique_message in text
+    assert "что-то пошло не так" not in text.lower()
 
 
 def test_ac_38_1_meetings_commands_and_escalation_targets_are_all_registry_free():
+    from ktalk_mcp.cli import _REGISTRY_FREE_COMMANDS
 
     meetings_commands = {
         "list-calendar",
@@ -334,11 +388,5 @@ def test_ac_38_1_meetings_commands_and_escalation_targets_are_all_registry_free(
         "create-meeting-confirm",
     }
     escalation_targets = {"auth-status", "config"}
-    assert False, (
-        "TODO: AC-38-1 (структурная опора эскалации) — assert "
-        "meetings_commands <= _REGISTRY_FREE_COMMANDS И escalation_targets <= "
-        "_REGISTRY_FREE_COMMANDS — путь эскалации (auth-status/config show) "
-        "достижим из того же процесса, что любая команда FR-32…FR-36/FR-33/"
-        f"FR-34, без доступного реестра. meetings_commands={meetings_commands!r}, "
-        f"escalation_targets={escalation_targets!r}"
-    )
+    assert meetings_commands <= _REGISTRY_FREE_COMMANDS
+    assert escalation_targets <= _REGISTRY_FREE_COMMANDS
