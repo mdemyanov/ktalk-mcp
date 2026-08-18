@@ -6,7 +6,7 @@ properties:
   - name: Фаза
     value: [Pilot]
   - name: Статус
-    value: [Draft]
+    value: [Approved]
 ---
 
 # Промт-поверхность плагина ktalk — расписание, встречи, участники, диагностика
@@ -321,6 +321,45 @@ NFR-9).
 | NFR-21 | Наследует NFR-5/NFR-10/NFR-19 |
 | NFR-22 | Наследует AC FR-13 `rooms-calendar-scheduling.md` |
 | NFR-23 | ADR-005 §3 |
+
+## Приёмка (BA-006)
+
+Проверено чтением `skills/ktalk-meetings/SKILL.md` (репозиторий `ktalk-plugin`, только чтение) —
+для AC, помеченных at-design QA-005 `N/A` как «проверяется текстом навыка, не pytest'ом» — и
+прогоном `uv run pytest`/`bash scripts/check.sh --fast` в этом репозитории (`456 passed`,
+`Errors: 0`).
+
+| Требование | Вердикт | Доказательство |
+|---|---|---|
+| FR-32 | принят | `SKILL.md` §«Расписание» (явные `--start`/`--end`, предупреждение `incomplete_segments` дословно, код≠0 отличим от пустого списка); `tests/test_cli_meetings_surface.py::test_ac_32_1b_…`/`test_ac_32_2_…`/`test_ac_32_3_…` |
+| FR-33 | принят | `SKILL.md` §«Создание встречи» — handoff из трёх частей (вывод preview / точная команда confirm / объяснение TTY-барьера), запрет программного вызова `create-meeting-confirm`, запрет дефолтов по перечню NFR-9; `grep -rl create-meeting-confirm` в дереве плагина — только `SKILL.md` (текст, не вызов) |
+| FR-34 | принят | `SKILL.md` §«Отмена встречи» — тот же паттерн handoff; получение `id` из `list-calendar`/вывода `create-meeting-confirm`, не изобретается; `tests/test_cli_meetings_surface.py::test_ac_34_1b_…`/`test_ac_34_2b_…` |
+| FR-35 | принят | `SKILL.md` §«Поиск участника» — таблица кодов `0/1/2`, явное «проверяй код, не текст»; коды `0/1/2` реализованы `src/ktalk_mcp/cli_contacts.py:44-55` (DEV-009); `tests/test_cli_meetings_surface.py::test_ac_35_3_…` |
+| FR-36 | принят | `SKILL.md` §«Диагностика комнаты» — безусловное предупреждение (для любого имени, не только предположительно нового), явный отказ описывать `get-room` как проверку занятости; `test_get_room_has_no_availability_check_flag` |
+| FR-37 | принят | `SKILL.md` §«Диагностика при отказе» п.1 (текст CLI без искажения) и п.4 (не единственная гипотеза при не-авторизационной ошибке); `tests/test_cli_meetings_surface.py::test_ac_37_1_…[list-calendar\|get-room\|search-contacts]` |
+| FR-38 | принят | `SKILL.md` §«Диагностика при отказе» — общая секция, на которую ссылаются все шесть сценариев; п.2 (`auth-status`), п.3 (`config show` при подозрении на конфигурацию хозяина), п.4 (не единственная гипотеза); `test_ac_38_1_meetings_commands_and_escalation_targets_are_all_registry_free` |
+| NFR-20 | принят | `bash scripts/check-plugin-composition.sh` → `OK` (grep MCP-имён `ktalk_list_calendar`/`ktalk_get_room`/`ktalk_search_contacts`/`ktalk_preview_meeting`/`ktalk_preview_cancel_meeting` — ноль совпадений в дереве плагина) |
+| NFR-21 | принят | `tests/test_cli_meeting.py::test_print_error_masks_secret_inside_response_body` (регрессия `redact_secrets`, разделяемая всеми командами этой поверхности) |
+| NFR-22 | принят | `SKILL.md` §«Диагностика при отказе» п.5 (навык вообще не вызывает `*-confirm`, повтора нет структурно); `test_nfr22_cancel_meeting_confirm_network_failure_no_retry_exactly_one_post` (ровно один POST на сбой с неизвестным исходом) |
+| NFR-23 | принят | `grep -rl create-meeting-confirm\|cancel-meeting-confirm` в дереве плагина — только текстовые упоминания в `SKILL.md` (печать команды, не вызов); `test_nfr23_cancel_meeting_confirm_refuses_without_tty` |
+
+**Не проверено живьём.** Ни одна операция не выполнялась против боевого контура KTalk (создание,
+отмена, чтение расписания/комнаты боевыми данными) — красная линия задачи. Покрытие выше опирается
+на текст навыка, юнит-тесты с моком транспорта и структурные grep-проверки, не на наблюдение
+реального поведения оператора в терминале.
+
+**Публикация пакета `ktalk-mcp` 0.8.0 в PyPI.** На дату приёмки в PyPI опубликована `0.7.0`
+(проверено `pypi.org/pypi/ktalk-mcp/json`), локально в этом репозитории — `0.8.0`
+(`pyproject.toml`). `compat.json` плагина требует минимум `0.8.0` — до публикации навык
+`ktalk-meetings` у operatorов на опубликованной `0.7.0` получает честный отказ `ktalk-onboard.sh
+check` (код 11) вместо тихой поломки (DEV-006, «Версионный узел»). Это релизный вопрос, не
+блокирует приёмку AC: каждый AC этой поверхности проверяется относительно контракта CLI, который
+уже существует в дереве `0.8.0`, а не относительно того, что опубликовано на данный момент; fail-
+closed поведение при рассогласовании версий — само по себе часть контракта (`compat.json`/ADR-014),
+и оно работает корректно. Публикация — операция владельца, вне полномочий BA/Dev.
+
+**Вердикт: pass.** Все FR-32…FR-38, NFR-20…NFR-23 — принят. Ничего не принято частично, ничего не
+отклонено.
 
 ## Инварианты и Safeguards
 
