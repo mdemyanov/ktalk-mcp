@@ -155,3 +155,35 @@ def test_maj02_file_written_after_registry_closes_uses_ambient_umask_not_0o077(
         "TODO: MAJ-02 — файл, записанный после закрытия Registry, не обязан "
         f"наследовать ограничение хранилища; получено {oct(mode)}"
     )
+
+
+# --- MAJ-03: export пишет зеркало рядом с БД из .ktalk.toml, а не рядом с дефолтом ---
+
+
+def test_maj03_export_mirror_follows_host_config_db_path(tmp_path, monkeypatch, capsys):
+    """`_cmd_export` резолвил путь БД повторно и БЕЗ host_config: реестр читался из
+    `.ktalk.toml`, а `registry.md` уезжал к машинному дефолту (`store.resolve_store_root`).
+    Регрессия: без `--db` зеркало обязано лечь рядом с настроенной БД."""
+    project = tmp_path / "project"
+    project.mkdir()
+    (project / ".git").mkdir()
+    db_path = project / "archive" / "registry.db"
+    db_path.parent.mkdir()
+    _seed(db_path)
+    (project / ".ktalk.toml").write_text(
+        f'[registry]\ndb_path = "{db_path}"\n', encoding="utf-8"
+    )
+
+    monkeypatch.delenv("KTALK_REGISTRY_DB", raising=False)
+    monkeypatch.delenv("CLAUDE_PROJECT_DIR", raising=False)
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "xdg"))
+    monkeypatch.chdir(project)
+
+    from ktalk_mcp.cli import main
+
+    rc = main(["export", "--json"])
+    assert rc == 0
+    written = json.loads(capsys.readouterr().out)["written"]
+    assert written == str(db_path.parent / "registry.md"), (
+        "export обязан писать зеркало рядом с БД, резолвленной с учётом .ktalk.toml"
+    )

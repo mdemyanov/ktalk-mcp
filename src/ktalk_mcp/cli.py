@@ -378,6 +378,12 @@ def main(argv: list[str] | None = None) -> int:
         old_umask = os.umask(0o077)
         try:
             db_path = resolve_db_path(args.db, host_config=host_config)
+            # MAJ-03: единственный резолв пути на команду. Хендлеры, которым нужен
+            # каталог реестра (`_cmd_export` -> registry.md), обязаны опираться на
+            # уже резолвленный путь — повторный resolve_db_path(args.db) без
+            # host_config терял третий источник FR-23 и уводил зеркало к машинному
+            # дефолту, пока сам реестр читался из `.ktalk.toml`.
+            args.db = str(db_path)
             reg = Registry(db_path)
         finally:
             os.umask(old_umask)
