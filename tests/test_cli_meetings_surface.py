@@ -151,32 +151,26 @@ def test_ac_34_1b_cancel_meeting_preview_zero_network_echoes_id_and_reason(
     assert "встреча переносится" in captured.out
 
 
-def test_ac_34_1c_cancel_meeting_commands_reject_json_flag():
-    """DEV-009: расхождение из at-design «Находки» п.1 закрыто для `-preview`,
-    сохранено для `-confirm` осознанно — см. дев-заметку
-    `content/60-implementation/dev-009-cli-json-and-exit-codes.md`.
+def test_ac_34_1c_cancel_meeting_commands_accept_json_flag():
+    """ADR-016 §1: `--json` теперь есть у обеих команд.
 
-    `cancel-meeting-preview` — без сети, безопасно дать `--json` (используется
-    промт-слоем для handoff-сообщения). `cancel-meeting-confirm` — только
-    интерактивный TTY (NFR-22/NFR-23), программно не вызывается, `--json` там не
-    нужен и не регистрируется — argparse отказывает на неизвестном флаге."""
+    DEV-009 не регистрировал его у `*-confirm` осознанно — «программно не
+    вызывается, машиночитаемый вывод не нужен». Волна 6 отменила посылку: агент
+    вызывает `*-confirm` сам и обязан разобрать исход машинно. Тест переименован
+    из `..._reject_json_flag` вслед за сменой контракта."""
     from ktalk_mcp.cli import build_parser
 
     parser = build_parser()
-    args = parser.parse_args(["cancel-meeting-preview", "--id", "x", "--json"])
-    assert args.json is True
-
-    with pytest.raises(SystemExit) as exc_info:
-        parser.parse_args(["cancel-meeting-confirm", "--id", "x", "--json"])
-    assert exc_info.value.code == 2  # argparse: неизвестный аргумент
+    assert parser.parse_args(["cancel-meeting-preview", "--id", "x", "--json"]).json is True
+    assert parser.parse_args(["cancel-meeting-confirm", "--id", "x", "--json"]).json is True
 
 
-def test_dev009_cancel_meeting_preview_json_zero_network_no_confirmation_id(
+def test_dev009_cancel_meeting_preview_json_zero_network_with_confirmation_id(
     httpx_mock: HTTPXMock, monkeypatch, capsys
 ):
-    """DEV-009: `--json` не делает сетевых вызовов (инвариант превью не меняется)
-    и не отдаёт `confirmation_id` (ADR-015: не переживает границу процессов, не
-    основание для подтверждения из другого процесса)."""
+    """DEV-009: `--json` не делает сетевых вызовов (инвариант превью не меняется).
+    ADR-016 §2 вернул `confirmation_id` в вывод — он снова переживает границу
+    процессов и обязателен для подтверждения в санкционном канале."""
     rc = _run(
         ["cancel-meeting-preview", "--id", "abc123==", "--reason", "переносится", "--json"],
         monkeypatch,
@@ -186,10 +180,12 @@ def test_dev009_cancel_meeting_preview_json_zero_network_no_confirmation_id(
     assert httpx_mock.get_requests() == []
     captured = capsys.readouterr()
     data = json.loads(captured.out)
-    assert data == {
-        "payload": {"operation": "cancel_meeting", "id": "abc123==", "reason": "переносится"}
+    assert data["payload"] == {
+        "operation": "cancel_meeting",
+        "id": "abc123==",
+        "reason": "переносится",
     }
-    assert "confirmation_id" not in captured.out
+    assert data["confirmation_id"]
 
 
 def test_ac_34_2b_cancel_meeting_id_is_required_on_both_subcommands():

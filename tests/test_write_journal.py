@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import json
+import re
 
 import httpx
 import pytest
@@ -91,10 +92,14 @@ def test_journal_records_attempt_and_outcome_for_successful_write(
 def test_journal_records_failed_and_unknown_outcomes(
     httpx_mock: HTTPXMock, monkeypatch, capsys, responder, expected_result, expected_code
 ):
+    calendar = re.compile(r".*/api/calendar(\?.*)?$")
     if responder is None:
-        httpx_mock.add_exception(httpx.ConnectError("сеть недоступна"))
+        httpx_mock.add_exception(httpx.ConnectError("сеть недоступна"), url=calendar)
     else:
-        httpx_mock.add_response(**responder)
+        httpx_mock.add_response(**responder, url=calendar)
+    httpx_mock.add_response(
+        status_code=200, json={"recordings": []}, url=re.compile(r".*/api/recordings.*")
+    )
 
     assert _confirm_once(monkeypatch, capsys) == 1
 

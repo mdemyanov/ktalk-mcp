@@ -129,3 +129,13 @@ def test_confirmation_ttl_is_ten_minutes():
     from ktalk_mcp.confirmation import CONFIRMATION_TTL
 
     assert CONFIRMATION_TTL == timedelta(minutes=10)
+
+
+def test_confirmation_id_never_starts_with_a_dash():
+    """DEV-012: id уходит на командную строку (`--confirmation-id <id>`), а
+    `token_urlsafe` умеет начинаться с `-` — argparse принимал такой id за флаг.
+    Регрессия на плавающий отказ примерно в каждом двадцатом вызове."""
+    from ktalk_mcp.confirmation import ConfirmationStore
+
+    store = ConfirmationStore()
+    assert all(not store.issue("hash").startswith("-") for _ in range(500))

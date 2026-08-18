@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import json
+import re
 
 import httpx
 import pytest
@@ -223,7 +224,14 @@ def test_budget_is_consumed_on_unknown_outcome(httpx_mock: HTTPXMock, monkeypatc
 
     _grant("create_meeting")
     cid = _preview_id("create-meeting-preview", _MEETING_ARGS, monkeypatch, capsys)
-    httpx_mock.add_exception(httpx.ConnectError("сеть недоступна"))
+    httpx_mock.add_exception(
+        httpx.ConnectError("сеть недоступна"), url=re.compile(r".*/api/calendar(\?.*)?$")
+    )
+    # Контрольный вызов корреляционной диагностики ADR-004 — отдельный ответ,
+    # иначе он съедал бы зарегистрированный сбой проверяемой операции.
+    httpx_mock.add_response(
+        status_code=200, json={"recordings": []}, url=re.compile(r".*/api/recordings.*")
+    )
 
     rc = _run(["create-meeting-confirm", *_MEETING_ARGS, "--confirmation-id", cid], monkeypatch)
 

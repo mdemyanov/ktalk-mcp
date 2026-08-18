@@ -71,7 +71,7 @@ def _run(argv, monkeypatch=None, base_url="https://test.ktalk.ru", session_token
 
 
 def test_tri_bool_accepts_true_false_case_insensitively():
-    from ktalk_mcp.cli_meeting import _tri_bool
+    from ktalk_mcp.cli_meeting_args import tri_bool as _tri_bool
 
     assert _tri_bool("true") is True
     assert _tri_bool("TRUE") is True
@@ -82,7 +82,7 @@ def test_tri_bool_accepts_true_false_case_insensitively():
 def test_tri_bool_rejects_non_true_false_tokens():
     import argparse
 
-    from ktalk_mcp.cli_meeting import _tri_bool
+    from ktalk_mcp.cli_meeting_args import tri_bool as _tri_bool
 
     with pytest.raises(argparse.ArgumentTypeError):
         _tri_bool("yes")
@@ -94,7 +94,7 @@ def test_tri_bool_rejects_non_true_false_tokens():
 
 
 def test_print_error_without_response_body_prints_only_message(capsys):
-    from ktalk_mcp.cli_meeting import _print_error
+    from ktalk_mcp.cli_meeting_args import print_error as _print_error
 
     _print_error("Ошибка X")
 
@@ -104,7 +104,7 @@ def test_print_error_without_response_body_prints_only_message(capsys):
 
 
 def test_print_error_with_response_body_appends_it_to_message(capsys):
-    from ktalk_mcp.cli_meeting import _print_error
+    from ktalk_mcp.cli_meeting_args import print_error as _print_error
 
     _print_error("Ошибка X", "тело ответа сервера тут")
 
@@ -119,7 +119,7 @@ def test_print_error_masks_secret_inside_response_body(monkeypatch, capsys):
     тексте сообщения."""
     monkeypatch.setenv("KTALK_SESSION_TOKEN", "super-secret-session-value")
     monkeypatch.delenv("KTALK_PERSONAL_API_KEY", raising=False)
-    from ktalk_mcp.cli_meeting import _print_error
+    from ktalk_mcp.cli_meeting_args import print_error as _print_error
 
     _print_error("Ошибка сети", "лог сервера содержит super-secret-session-value внутри")
 
@@ -154,22 +154,23 @@ def test_cli_create_meeting_preview_full_flags_zero_network_calls(
     assert captured.out  # что-то человекочитаемое напечатано
 
 
-def test_dev009_cli_create_meeting_preview_json_zero_network_no_confirmation_id(
+def test_dev009_cli_create_meeting_preview_json_zero_network_with_confirmation_id(
     httpx_mock: HTTPXMock, monkeypatch, capsys
 ):
-    """DEV-009: `--json` не делает сетевых вызовов (инвариант превью не меняется)
-    и не отдаёт `confirmation_id` (ADR-015: не переживает границу процессов, не
-    основание для подтверждения из другого процесса) — только `body`, тех же
-    значений, что уходят буквально в `create-meeting-confirm` (handoff)."""
+    """DEV-009: `--json` не делает сетевых вызовов (инвариант превью не меняется).
+
+    ADR-016 §2 отменил вторую половину прежнего контракта: `confirmation_id` снова
+    выводится — хранилище персистентно, и именно id связывает предъявленное тело с
+    записью. Тест переименован из `..._no_confirmation_id` вслед за сменой контракта."""
     rc = _run([*_PREVIEW_ARGV_FULL, "--json"], monkeypatch)
 
     assert rc == 0
     assert httpx_mock.get_requests() == []
     captured = capsys.readouterr()
     data = json.loads(captured.out)
-    assert set(data.keys()) == {"body"}
+    assert set(data.keys()) == {"body", "confirmation_id"}
     assert data["body"]["subject"] == "Синтетическая встреча"
-    assert "confirmation_id" not in captured.out
+    assert data["confirmation_id"]
 
 
 def test_cli_create_meeting_preview_missing_room_name_names_the_field(
@@ -293,16 +294,20 @@ def test_cli_create_meeting_confirm_refuses_when_not_a_tty(
     httpx_mock: HTTPXMock, monkeypatch, capsys
 ):
     """Под pytest stdin/stdout по умолчанию перехвачены — уже не терминал, негативный
-    случай получаем без дополнительного мокирования (эквивалент пайпа/CI-раннера)."""
+    случай получаем без дополнительного мокирования (эквивалент пайпа/CI-раннера).
+
+    ADR-016 сменил причину отказа: до волны 6 отказывал сам TTY-барьер, теперь —
+    отсутствие санкции (код 40). Проверяемое свойство то же и осталось верным:
+    без терминала и без санкции команда не делает ни одного сетевого вызова."""
     assert sys.stdin.isatty() is False
     assert sys.stdout.isatty() is False
 
     rc = _run(["create-meeting-confirm", *_PREVIEW_ARGV_FULL[1:]], monkeypatch)
 
-    assert rc != 0
+    assert rc == 40
     assert httpx_mock.get_requests() == []
     captured = capsys.readouterr()
-    assert "терминал" in (captured.out + captured.err).lower()
+    assert "санкци" in (captured.out + captured.err).lower()
 
 
 def _with_real_pty(monkeypatch, input_line: str):

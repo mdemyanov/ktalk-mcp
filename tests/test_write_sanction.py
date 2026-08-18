@@ -183,7 +183,12 @@ def test_cli_sanction_revoke_all_clears_both_keys(capsys):
 
 
 def test_cli_sanction_rejects_unknown_operation():
-    assert _run(["sanction", "revoke", "delete-everything"]) != 0
+    """argparse отвергает неизвестную операцию до всякой логики — SystemExit(2),
+    тот же код «неверные аргументы», что и у остальных подкоманд."""
+    with pytest.raises(SystemExit) as excinfo:
+        _run(["sanction", "revoke", "delete-everything"])
+
+    assert excinfo.value.code == 2
 
 
 # --- NFR-24: данные контура не расширяют санкцию и не меняют состав тела -------------------

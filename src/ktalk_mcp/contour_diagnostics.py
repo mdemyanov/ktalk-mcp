@@ -81,11 +81,21 @@ async def diagnose_undocumented_failure(
             "Обновлять токен/ключ не нужно — причина в том, как именно эта операция "
             "принимает credential (см. ADR-008), не в его валидности."
         )
-        new_exc.response_body = getattr(error, "response_body", None)
+        _carry(error, new_exc)
         raise new_exc from error
     new_drift = ContourDriftError(operation, str(error))
-    new_drift.response_body = getattr(error, "response_body", None)
+    _carry(error, new_drift)
     raise new_drift from error
+
+
+def _carry(error: Exception, derived: Exception) -> None:
+    """DEV-012 (ADR-016 §5): вместе с телом ответа переносится и `status_code`.
+    Без него журнал операций не отличал «сервер отказал» от «ответа не было» на той
+    ветке, где контроль прошёл, — а именно этот класс исходов и разбирают постфактум."""
+    derived.response_body = getattr(error, "response_body", None)
+    status_code = getattr(error, "status_code", None)
+    if status_code is not None:
+        derived.status_code = status_code
 
 
 def require_contract_field(payload: dict, field: str, operation: str) -> None:
