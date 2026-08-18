@@ -318,6 +318,44 @@ def chunk_transcript_raw(data: dict, chunk_size: int) -> list[str]:
     return chunks
 
 
+def render_transcript_output(data: dict, fmt: str, chunk: int, chunk_size: int) -> str:
+    """Общий слой чтения транскрипта с чанкингом — единственная точка правды для
+    `ktalk_get_transcript` (MCP) и `ktalk get-transcript` (CLI, DEV-002 волны 3):
+    поведение auto/paged-чанкинга не дублируется по вызывающим обёрткам."""
+    if fmt == "raw":
+        full_text = format_raw(data)
+    else:
+        full_text = format_transcript(data)
+
+    total_characters = len(full_text)
+
+    if chunk == 0 and total_characters <= chunk_size:
+        return full_text
+
+    if fmt == "raw":
+        chunks = chunk_transcript_raw(data, chunk_size)
+    else:
+        chunks = chunk_transcript_markdown(full_text, chunk_size)
+
+    total_chunks = len(chunks)
+    chunk_index = 0 if chunk == 0 else chunk - 1
+
+    if chunk_index < 0 or chunk_index >= total_chunks:
+        return f"Чанк {chunk} не существует. Всего чанков: {total_chunks}"
+
+    return json.dumps(
+        {
+            "result": chunks[chunk_index],
+            "chunk": chunk_index + 1,
+            "total_chunks": total_chunks,
+            "has_more": chunk_index + 1 < total_chunks,
+            "total_characters": total_characters,
+        },
+        ensure_ascii=False,
+        indent=2,
+    )
+
+
 def _format_summary_chunks(chunks: list[dict] | None) -> str:
     """Render summary chunks to markdown text."""
     if not chunks:

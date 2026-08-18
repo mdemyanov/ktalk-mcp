@@ -3,25 +3,20 @@
 
 from __future__ import annotations
 
-import json
-
 from fastmcp import FastMCP
 
 from ktalk_mcp.client import KTalkError, get_shared_client
 from ktalk_mcp.config import KTalkConfigError
 from ktalk_mcp.download import download_recording_file
 from ktalk_mcp.formatters import (
-    chunk_transcript_markdown,
-    chunk_transcript_raw,
     format_download_result,
     format_participants,
-    format_raw,
     format_recording,
     format_recordings_list,
     format_summary,
     format_summary_by_type,
-    format_transcript,
     render_tool_output,
+    render_transcript_output,
 )
 
 _AUTH_ERRORS = (KTalkError, KTalkConfigError)
@@ -105,36 +100,7 @@ def register(mcp: FastMCP) -> None:
         try:
             client = get_shared_client()
             data = await client.get_transcript(recording_key)
-
-            if format == "raw":
-                full_text = format_raw(data)
-            else:
-                full_text = format_transcript(data)
-
-            total_characters = len(full_text)
-
-            if chunk == 0 and total_characters <= chunk_size:
-                return full_text
-
-            if format == "raw":
-                chunks = chunk_transcript_raw(data, chunk_size)
-            else:
-                chunks = chunk_transcript_markdown(full_text, chunk_size)
-
-            total_chunks = len(chunks)
-            chunk_index = 0 if chunk == 0 else chunk - 1
-
-            if chunk_index < 0 or chunk_index >= total_chunks:
-                return f"Чанк {chunk} не существует. Всего чанков: {total_chunks}"
-
-            return json.dumps({
-                "result": chunks[chunk_index],
-                "chunk": chunk_index + 1,
-                "total_chunks": total_chunks,
-                "has_more": chunk_index + 1 < total_chunks,
-                "total_characters": total_characters,
-            }, ensure_ascii=False, indent=2)
-
+            return render_transcript_output(data, format, chunk, chunk_size)
         except _AUTH_ERRORS as e:
             return str(e)
 

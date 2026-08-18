@@ -9,6 +9,16 @@ from pathlib import Path
 
 from ktalk_mcp.cli_contacts import cmd_search_contacts
 from ktalk_mcp.cli_contacts import register_subparsers as register_contacts_subparsers
+from ktalk_mcp.cli_content import (
+    cmd_download_recording,
+    cmd_get_participants,
+    cmd_get_recording,
+    cmd_get_summary,
+    cmd_get_summary_type,
+    cmd_get_transcript,
+    cmd_list_recordings,
+)
+from ktalk_mcp.cli_content import register_subparsers as register_content_subparsers
 from ktalk_mcp.cli_meeting import (
     cmd_cancel_meeting_confirm,
     cmd_cancel_meeting_preview,
@@ -16,6 +26,13 @@ from ktalk_mcp.cli_meeting import (
     cmd_create_meeting_preview,
 )
 from ktalk_mcp.cli_meeting import register_subparsers as register_meeting_subparsers
+from ktalk_mcp.cli_meetings_read import (
+    cmd_get_chat_messages,
+    cmd_get_room,
+    cmd_list_archive,
+    cmd_list_calendar,
+)
+from ktalk_mcp.cli_meetings_read import register_subparsers as register_meetings_read_subparsers
 from ktalk_mcp.cli_sync import cmd_auth_status, cmd_sync
 from ktalk_mcp.config import redact_secrets, resolve_db_path
 from ktalk_mcp.host_config import HostConfig, discover_host_config
@@ -87,6 +104,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     register_meeting_subparsers(sub)
     register_contacts_subparsers(sub)
+    register_content_subparsers(sub)
+    register_meetings_read_subparsers(sub)
 
     return parser
 
@@ -259,6 +278,19 @@ _REGISTRY_FREE_COMMANDS = {
     "cancel-meeting-preview",
     "cancel-meeting-confirm",
     "search-contacts",
+    # DEV-002 волны 3 (ADR-012 §2а): читающие CLI-эквиваленты MCP-инструментов —
+    # только сеть, реестр SQLite не открывают.
+    "list-recordings",
+    "get-recording",
+    "get-transcript",
+    "get-summary",
+    "get-summary-type",
+    "get-participants",
+    "download-recording",
+    "list-archive",
+    "get-chat-messages",
+    "list-calendar",
+    "get-room",
 }
 
 
@@ -281,6 +313,17 @@ _HANDLERS = {
     "cancel-meeting-preview": cmd_cancel_meeting_preview,
     "cancel-meeting-confirm": cmd_cancel_meeting_confirm,
     "search-contacts": cmd_search_contacts,
+    "list-recordings": cmd_list_recordings,
+    "get-recording": cmd_get_recording,
+    "get-transcript": cmd_get_transcript,
+    "get-summary": cmd_get_summary,
+    "get-summary-type": cmd_get_summary_type,
+    "get-participants": cmd_get_participants,
+    "download-recording": cmd_download_recording,
+    "list-archive": cmd_list_archive,
+    "get-chat-messages": cmd_get_chat_messages,
+    "list-calendar": cmd_list_calendar,
+    "get-room": cmd_get_room,
 }
 
 
