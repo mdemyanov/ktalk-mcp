@@ -98,12 +98,70 @@ def test_ac_fr22_3_store_root_created_with_owner_only_permissions(tmp_path, monk
     assert mode == 0o700, f"TODO: NFR-15 — каталог хранилища должен быть 0700, получено {oct(mode)}"
 
 
+def test_maj03_existing_root_with_weak_permissions_is_tightened_to_0700(
+    tmp_path, monkeypatch
+):
+    """Security review SEC-003, MAJ-03. Воспроизведение из отчёта: каталог создан
+    заранее с 0755 (например, версией до этой волны, ручным созданием,
+    восстановлением из бэкапа), `mkdir(exist_ok=True)` под новым umask не чинит
+    режим уже существующего каталога — resolve_store_root() обязан привести его
+    к 0700 безусловно, не только при первом создании."""
+    import stat
+
+    from ktalk_mcp.store import resolve_store_root
+
+    fake_home = tmp_path / "home"
+    monkeypatch.delenv("XDG_DATA_HOME", raising=False)
+    monkeypatch.setenv("HOME", str(fake_home))
+
+    pre_existing = fake_home / ".local" / "share" / "ktalk"
+    pre_existing.mkdir(parents=True)
+    pre_existing.chmod(0o755)
+    assert stat.S_IMODE(pre_existing.stat().st_mode) == 0o755
+
+    root = resolve_store_root()
+
+    mode = stat.S_IMODE(root.stat().st_mode)
+    assert mode == 0o700, (
+        f"TODO: MAJ-03 — существующий каталог со слабыми правами должен стать 0700, "
+        f"получено {oct(mode)}"
+    )
+
+
+def test_maj02_resolve_store_root_umask_mutation_documented_not_restored_by_itself(
+    tmp_path, monkeypatch
+):
+    """Security review SEC-003, MAJ-02. `resolve_store_root()` сама по себе НЕ
+    восстанавливает umask (сохранено поведение по умолчанию для вызывающих, не
+    оборачивающих вызов сами) — restoring является ответственностью вызывающей
+    стороны (`cli.py::main`, см. dev-заметку). Тест фиксирует контракт явно, чтобы
+    случайное «улучшение» внутри store.py не расходилось молча с cli.py."""
+    import os
+
+    import ktalk_mcp.store as store_mod
+
+    fake_home = tmp_path / "home"
+    monkeypatch.delenv("XDG_DATA_HOME", raising=False)
+    monkeypatch.setenv("HOME", str(fake_home))
+
+    old_umask = os.umask(0o022)
+    os.umask(old_umask)  # восстановить сразу, только чтобы узнать исходное значение
+
+    store_mod.resolve_store_root()
+
+    after = os.umask(0o022)
+    os.umask(after)
+    assert after == 0o077, (
+        "resolve_store_root() обязана устанавливать 0o077 процессно (контракт "
+        "сохранён) — восстановление вызывающая сторона делает сама (cli.py)"
+    )
+
+
 def test_nfr15_registry_db_file_created_with_0600(tmp_path, monkeypatch):
     """NFR-15: файл БД реестра при первом создании — 0600, не 0644 (umask-контролируемо,
     без post-hoc chmod)."""
-    from ktalk_mcp.store import resolve_store_root
-
     from ktalk_mcp.registry import Registry
+    from ktalk_mcp.store import resolve_store_root
 
     fake_home = tmp_path / "home"
     monkeypatch.delenv("XDG_DATA_HOME", raising=False)

@@ -9,6 +9,7 @@ Companion-спека: `content/40-architecture/ADR-013-central-transcript-store-
 
 from __future__ import annotations
 
+import os
 import shutil
 import sqlite3
 from datetime import date
@@ -48,14 +49,33 @@ def migrate_to_central_store(source: str | Path, target: str | Path) -> Path:
     source = Path(source)
     target = Path(target)
 
-    if target.exists():
+    # BLOCK-01/MAJ-03 (security review SEC-003): права цели — NFR-15 (0700/0600)
+    # независимо от прав источника и от ambient umask, безусловно, не только при
+    # первом создании каталога — `mkdir(exist_ok=True)` не чинит уже существующий
+    # каталог со слабыми правами.
+    target.parent.mkdir(parents=True, exist_ok=True)
+    os.chmod(target.parent, 0o700)
+
+    # MIN-01: check-then-act между `target.exists()` и созданием файла закрыт —
+    # `O_EXCL` делает проверку-и-создание одной атомарной операцией ОС, не двумя
+    # раздельными шагами. Явный `mode=0o600` при создании — права заданы с
+    # рождения файла, не пост-хок `chmod`/`copy2` (который перенёс бы биты
+    # источника поверх).
+    try:
+        fd = os.open(str(target), os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+    except FileExistsError as exc:
         raise MigrationTargetExistsError(
             f"Целевой файл уже существует: {target} — повторная миграция не "
             "перезаписывает данные, добавленные после предыдущей миграции"
-        )
+        ) from exc
 
-    target.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(source, target)
+    try:
+        with os.fdopen(fd, "wb") as dst_f, open(source, "rb") as src_f:
+            shutil.copyfileobj(src_f, dst_f)
+        os.chmod(target, 0o600)  # copyfileobj не переносит metadata — явный chmod всё равно
+    except BaseException:
+        target.unlink(missing_ok=True)
+        raise
 
     if not _dumps_match(source, target):
         target.unlink(missing_ok=True)

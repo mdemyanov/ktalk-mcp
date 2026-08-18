@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -33,6 +34,8 @@ from ktalk_mcp.cli_meetings_read import (
     cmd_list_calendar,
 )
 from ktalk_mcp.cli_meetings_read import register_subparsers as register_meetings_read_subparsers
+from ktalk_mcp.cli_store import cmd_migrate_to_central_store
+from ktalk_mcp.cli_store import register_subparsers as register_store_subparsers
 from ktalk_mcp.cli_sync import cmd_auth_status, cmd_sync
 from ktalk_mcp.config import redact_secrets, resolve_db_path
 from ktalk_mcp.host_config import HostConfig, discover_host_config
@@ -106,6 +109,7 @@ def build_parser() -> argparse.ArgumentParser:
     register_contacts_subparsers(sub)
     register_content_subparsers(sub)
     register_meetings_read_subparsers(sub)
+    register_store_subparsers(sub)
 
     return parser
 
@@ -291,6 +295,12 @@ _REGISTRY_FREE_COMMANDS = {
     "get-chat-messages",
     "list-calendar",
     "get-room",
+    # MAJ-04 (security review SEC-003): управляет source/target сама, минуя
+    # стандартный Registry(resolve_db_path(args.db)) — если бы команда не была
+    # здесь, main() открыл бы ПОСТОРОННИЙ Registry по машинному дефолту как
+    # побочный эффект простого запуска команды, что противоречит NFR-12
+    # ("миграция — явный шаг, без скрытых побочных эффектов").
+    "migrate-to-central-store",
 }
 
 
@@ -324,6 +334,7 @@ _HANDLERS = {
     "get-chat-messages": cmd_get_chat_messages,
     "list-calendar": cmd_list_calendar,
     "get-room": cmd_get_room,
+    "migrate-to-central-store": cmd_migrate_to_central_store,
 }
 
 
@@ -340,7 +351,27 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.command in _REGISTRY_FREE_COMMANDS:
             return handler(None, args)
-        with Registry(resolve_db_path(args.db)) as reg:
+        # MAJ-01 (security review SEC-003): третий источник приоритета FR-23
+        # (`.ktalk.toml` → registry.db_path) подключается здесь — раньше
+        # discover_host_config() не вызывался в этой ветке, третий источник был
+        # мёртв в проде. Не для _REGISTRY_FREE_COMMANDS — эти команды не открывают
+        # реестр и не нуждаются в резолвинге пути к нему вовсе.
+        host_config = discover_host_config()
+        # MAJ-02: окно мутации umask сужено ровно до конструктора Registry (где
+        # sqlite3.connect создаёт registry.db/-wal/-shm, см. registry.py.__init__) —
+        # не до конца обработки хендлера. Восстанавливается сразу после открытия,
+        # до того как хендлер начнёт писать что-либо ещё (например, `_cmd_export`
+        # → registry.md вне хранилища не должен унаследовать 0600 без явного
+        # решения). resolve_store_root() (store.py) продолжает мутировать umask
+        # сама для вызывающих, не оборачивающих её сами (обратная совместимость,
+        # см. dev-заметку) — здесь мутация полностью укрывает и этот случай.
+        old_umask = os.umask(0o077)
+        try:
+            db_path = resolve_db_path(args.db, host_config=host_config)
+            reg = Registry(db_path)
+        finally:
+            os.umask(old_umask)
+        with reg:
             return handler(reg, args)
     except Exception as exc:  # noqa: BLE001 - surface as CLI error
         # NFR-5: последний рубеж маскирования перед печатью — покрывает и КTalkError

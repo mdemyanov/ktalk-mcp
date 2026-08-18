@@ -53,6 +53,11 @@ def resolve_store_root() -> Path:
     root = base / _STORE_DIR_NAME
     os.umask(0o077)
     root.mkdir(parents=True, exist_ok=True)
+    # MAJ-03 (security review SEC-003): `mkdir(exist_ok=True)` не чинит режим уже
+    # существующего каталога — безусловный `chmod`, не только при первом создании,
+    # закрывает случай «каталог остался с ослабленными правами от более ранней
+    # версии/ручного создания/восстановления из бэкапа».
+    os.chmod(root, 0o700)
     return root
 
 
