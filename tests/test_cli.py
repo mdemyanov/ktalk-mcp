@@ -241,3 +241,13 @@ def test_sync_inserts_dedups_and_expires(tmp_path, capsys, monkeypatch, httpx_mo
         assert reg.get_recording("dup")["name"] == "Existing renamed"  # content updated
         assert reg.get_recording("old")["status"] == "skipped"
         assert reg.get_meta("sync_count") == "1"
+
+
+def test_version_flag(capsys):
+    from ktalk_mcp.cli import main
+
+    code = main(["--version"])
+    out = capsys.readouterr().out
+    assert code == 0
+    assert out.startswith("ktalk-mcp ")
+    assert out.split()[1].count(".") == 2

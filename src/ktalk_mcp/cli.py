@@ -47,6 +47,11 @@ _STATUSES = ("new", "processing", "done", "skipped", "partial")
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="ktalk", description="Реестр записей Kontur Talk")
     parser.add_argument("--db", default=None, help="Путь к SQLite-базе реестра")
+    parser.add_argument(
+        "--version",
+        action="store_true",
+        help="Версия пакета ktalk-mcp",
+    )
     sub = parser.add_subparsers(dest="command")
 
     p_list = sub.add_parser("list", help="Список записей")
@@ -341,6 +346,11 @@ _HANDLERS = {
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+    if getattr(args, "version", False):
+        from ktalk_mcp import __version__
+
+        print(f"ktalk-mcp {__version__}")
+        return 0
     if not args.command:
         parser.print_help()
         return 2
