@@ -251,3 +251,23 @@ def test_version_flag(capsys):
     assert code == 0
     assert out.startswith("ktalk-mcp ")
     assert out.split()[1].count(".") == 2
+
+
+def test_version_matches_pyproject(capsys):
+    """`ktalk --version` — источник истины для гейта совместимости плагина
+    (`installed_version()` в ktalk-onboard.sh). В 0.8.0 литерал `__version__`
+    остался на 0.7.0 при дистрибутиве 0.8.0, и гейт браковал совместимую
+    установку. Тест ловит расхождение до релиза, а не после."""
+    import tomllib
+    from pathlib import Path
+
+    from ktalk_mcp.cli import main
+
+    pyproject = Path(__file__).resolve().parent.parent / "pyproject.toml"
+    declared = tomllib.loads(pyproject.read_text(encoding="utf-8"))["project"]["version"]
+
+    code = main(["--version"])
+    printed = capsys.readouterr().out.split()[1]
+
+    assert code == 0
+    assert printed == declared, f"ktalk --version={printed}, pyproject={declared}"
