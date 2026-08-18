@@ -11,6 +11,7 @@ title: Требования
 | [Комнаты, календарь и планирование встреч](rooms-calendar-scheduling.md) | Production | Draft |
 | [Плагин ktalk в произвольном проекте](ktalk-plugin.md) | Pilot | Draft |
 | [Онбординг плагина ktalk — обнаружение зависимости и санкционированная установка](ktalk-plugin-onboarding.md) | Pilot | Draft |
+| [Промт-поверхность плагина ktalk — расписание, встречи, участники, диагностика](ktalk-plugin-meetings.md) | Pilot | Draft |
 
 Функциональность v0.1–v0.4 разрабатывалась по спекам в
 [docs/superpowers/specs/](../../docs/superpowers/specs/) до подключения контура. Ретроспективно
