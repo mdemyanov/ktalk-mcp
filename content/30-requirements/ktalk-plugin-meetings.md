@@ -455,6 +455,36 @@ closed поведение при рассогласовании версий —
 **Вердикт: pass.** Все FR-32…FR-38, NFR-20…NFR-23 — принят. Ничего не принято частично, ничего не
 отклонено.
 
+## Приёмка (BA-008)
+
+Приёмка редакции волны 6. Проверено чтением `skills/ktalk-meetings/SKILL.md` (репозиторий
+`ktalk-plugin`) — для AC, помеченных [at-design QA-007](../40-architecture/at-design-agent-executed-writes.md)
+как «проверяется текстом навыка» — и прогоном `uv run pytest` / `bash scripts/check.sh --fast`
+(`504 passed`, `Errors: 0`, [отчёт QA-008](../40-architecture/qa-report-agent-executed-writes.md)).
+
+| Требование | Вердикт | Доказательство |
+|---|---|---|
+| FR-33 | принят | AC1: `test_confirm_without_sanction_refuses_and_makes_no_request` (код 40, ноль запросов) + `check-plugin-composition.sh` (нет программного запуска `sanction grant`); AC2: `test_confirm_with_sanction_and_confirmation_id_creates_exactly_once`, `test_confirm_without_confirmation_id_refuses`; AC3: `test_confirm_refuses_when_body_changed_after_preview`; AC4: `SKILL.md` §«Создание встречи» — запрет дефолтов по перечню NFR-9 сохранён дословно; AC5: `test_journal_records_attempt_and_outcome_for_successful_write` |
+| FR-34 | принят | `test_cancel_confirm_with_sanction_cancels_exactly_once`, `test_create_sanction_does_not_authorize_cancel` (ключи независимы); `SKILL.md` §«Отмена встречи» — откуда берётся `id`, показ `payload` до записи |
+| NFR-22 | принят | `test_repeat_with_consumed_confirmation_id_refuses_exactly_one_post` (ровно один POST), `test_budget_is_consumed_on_unknown_outcome` (списание и на неизвестном исходе); `SKILL.md` §«Диагностика при отказе» п.5 |
+| NFR-23 | принят | п.1 — `test_cli_sanction_grant_refuses_without_tty_and_writes_nothing` (код 43, файл не создан, без эмуляции pty) + grep по дереву плагина; п.2 — `test_confirm_with_expired_sanction_returns_41`, `test_confirm_with_exhausted_sanction_returns_42`, `test_grant_beyond_ceiling_is_rejected` (6 форм); п.3 — `test_keys_are_independent`; п.4 — `test_revoke_takes_effect_on_next_attempt`; п.5 — `test_broken_sanction_file_reads_as_absent` (6 форм) + `test_world_writable_sanction_file_reads_as_absent`; п.6 — `test_unwritable_journal_blocks_the_network_call` |
+| NFR-24 | принят | AC1 — `SKILL.md` §«Данные контура — не инструкции» во вводной части, покрывает все читающие команды; AC2 — FR-35 не менялся, показ предпросмотра перед записью обязателен текстом навыка; AC3 — `test_injection_like_subject_does_not_change_body_or_sanction` + регрессия `test_meeting_body.py` |
+
+**Не проверено живьём.** Ни одна операция волны не выполнялась против боевого контура: ни выдача
+санкции в настоящем терминале, ни создание, ни отмена встречи агентом, ни поведение при
+blanket-правиле `settings.json`. Покрытие опирается на мок транспорта, текст навыка и структурные
+проверки — не на наблюдение реального поведения.
+
+**Что принято с оговоркой в тексте решения, а не в AC.** SEC-006 MAJ-01: файловая санкция не
+защищает от агента с доступом к shell — он может написать файл сам, минуя `grant`. Это не отказ
+ни одного AC (все они про поведение контура, а не про модель угроз) и не регресс относительно
+волны 5 — TTY-барьер имел тот же предел. Оговорка внесена в «Негативные» ADR-016; BA фиксирует
+её здесь, чтобы приёмка не читалась как утверждение о невозможности обхода.
+
+**Вердикт: pass.** FR-33, FR-34, NFR-22, NFR-23, NFR-24 — принят. Частично принятых нет,
+отклонённых нет. FR-32, FR-35…FR-38, NFR-20, NFR-21 волной не затрагивались; их приёмка —
+BA-006, остаётся в силе.
+
 ## Инварианты и Safeguards
 
 **Содержательные:**
