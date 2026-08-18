@@ -22,6 +22,7 @@ TTY-сценарий кодирует рабочую гипотезу — под
 
 from __future__ import annotations
 
+import json
 import os
 import pty
 import sys
@@ -151,6 +152,24 @@ def test_cli_create_meeting_preview_full_flags_zero_network_calls(
     assert httpx_mock.get_requests() == []
     captured = capsys.readouterr()
     assert captured.out  # что-то человекочитаемое напечатано
+
+
+def test_dev009_cli_create_meeting_preview_json_zero_network_no_confirmation_id(
+    httpx_mock: HTTPXMock, monkeypatch, capsys
+):
+    """DEV-009: `--json` не делает сетевых вызовов (инвариант превью не меняется)
+    и не отдаёт `confirmation_id` (ADR-015: не переживает границу процессов, не
+    основание для подтверждения из другого процесса) — только `body`, тех же
+    значений, что уходят буквально в `create-meeting-confirm` (handoff)."""
+    rc = _run([*_PREVIEW_ARGV_FULL, "--json"], monkeypatch)
+
+    assert rc == 0
+    assert httpx_mock.get_requests() == []
+    captured = capsys.readouterr()
+    data = json.loads(captured.out)
+    assert set(data.keys()) == {"body"}
+    assert data["body"]["subject"] == "Синтетическая встреча"
+    assert "confirmation_id" not in captured.out
 
 
 def test_cli_create_meeting_preview_missing_room_name_names_the_field(

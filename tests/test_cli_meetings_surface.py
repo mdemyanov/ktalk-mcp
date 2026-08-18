@@ -17,10 +17,12 @@ red здесь означает «CLI-контракт этой волны ещ�
 
 from __future__ import annotations
 
+import json
 import os
 import pty
 import sys
 
+import httpx
 import pytest
 from pytest_httpx import HTTPXMock
 
@@ -116,20 +118,44 @@ def test_ac_34_1b_cancel_meeting_preview_zero_network_echoes_id_and_reason(
 
 
 def test_ac_34_1c_cancel_meeting_commands_reject_json_flag():
+    """DEV-009: расхождение из at-design «Находки» п.1 закрыто для `-preview`,
+    сохранено для `-confirm` осознанно — см. дев-заметку
+    `content/60-implementation/dev-009-cli-json-and-exit-codes.md`.
+
+    `cancel-meeting-preview` — без сети, безопасно дать `--json` (используется
+    промт-слоем для handoff-сообщения). `cancel-meeting-confirm` — только
+    интерактивный TTY (NFR-22/NFR-23), программно не вызывается, `--json` там не
+    нужен и не регистрируется — argparse отказывает на неизвестном флаге."""
     from ktalk_mcp.cli import build_parser
 
     parser = build_parser()
-    with pytest.raises(SystemExit):
-        parser.parse_args(["cancel-meeting-preview", "--id", "x", "--json"])
-    with pytest.raises(SystemExit):
+    args = parser.parse_args(["cancel-meeting-preview", "--id", "x", "--json"])
+    assert args.json is True
+
+    with pytest.raises(SystemExit) as exc_info:
         parser.parse_args(["cancel-meeting-confirm", "--id", "x", "--json"])
-    assert False, (
-        "TODO: AC-34-1c — известное расхождение (см. at-design «Находки», п.1): "
-        "cancel-meeting-* не регистрируют --json вовсе; оба parse_args должны "
-        "поднимать SystemExit на неизвестном аргументе; убедиться, что "
-        "исключение действительно от argparse (не от чего-то ещё), затем "
-        "явно принять/задокументировать факт тестом (не просто ждать исключения)"
+    assert exc_info.value.code == 2  # argparse: неизвестный аргумент
+
+
+def test_dev009_cancel_meeting_preview_json_zero_network_no_confirmation_id(
+    httpx_mock: HTTPXMock, monkeypatch, capsys
+):
+    """DEV-009: `--json` не делает сетевых вызовов (инвариант превью не меняется)
+    и не отдаёт `confirmation_id` (ADR-015: не переживает границу процессов, не
+    основание для подтверждения из другого процесса)."""
+    rc = _run(
+        ["cancel-meeting-preview", "--id", "abc123==", "--reason", "переносится", "--json"],
+        monkeypatch,
     )
+
+    assert rc == 0
+    assert httpx_mock.get_requests() == []
+    captured = capsys.readouterr()
+    data = json.loads(captured.out)
+    assert data == {
+        "payload": {"operation": "cancel_meeting", "id": "abc123==", "reason": "переносится"}
+    }
+    assert "confirmation_id" not in captured.out
 
 
 def test_ac_34_2b_cancel_meeting_id_is_required_on_both_subcommands():
@@ -178,30 +204,59 @@ def test_nfr22_cancel_meeting_confirm_network_failure_no_retry_exactly_one_post(
 
 
 def test_search_contacts_rejects_json_flag():
+    """DEV-009: расхождение из at-design «Находки» п.1 закрыто — `search-contacts`
+    теперь регистрирует `--json` (используется промт-слоем для машиночитаемого
+    вывода списка кандидатов). Имя теста сохранено для трассировки из at-design
+    (`at-design-ktalk-plugin-meetings.md`, FR-35), тело перевёрнуто на проверку
+    нового контракта — см. дев-заметку
+    `content/60-implementation/dev-009-cli-json-and-exit-codes.md`."""
     from ktalk_mcp.cli import build_parser
 
     parser = build_parser()
-    with pytest.raises(SystemExit):
-        parser.parse_args(["search-contacts", "--query", "x", "--json"])
-    assert False, (
-        "TODO: опора факта (at-design «Находки», п.1) — search-contacts не "
-        "регистрирует --json вовсе (cli_contacts.py::register_subparsers); "
-        "assert SystemExit поднят; зафиксировать явным ассертом, не молчаливым "
-        "pytest.raises без тела теста"
-    )
+    args = parser.parse_args(["search-contacts", "--query", "x", "--json"])
+    assert args.json is True
 
 
-def test_ac_35_3_zero_matches_vs_network_error_share_exit_code_distinguishable_only_by_channel(
+def test_dev009_search_contacts_json_zero_matches_shape(
     httpx_mock: HTTPXMock, monkeypatch, capsys
 ):
-    assert False, (
-        "TODO: AC-35-3 — два прогона: (1) мок search_contacts -> [] (0 "
-        "кандидатов) -> rc==1, stdout содержит 'Ничего не найдено', stderr "
-        "пуст; (2) мок сетевой ошибки -> rc==1, stderr содержит 'Ошибка:', "
-        "stdout пуст. assert rc одинаков в обоих случаях (замаскированный "
-        "отказ — см. at-design «Замаскированный отказ»), но каналы разные — "
-        "единственный способ различить программно"
-    )
+    """`--json` на 0 кандидатов — валидный JSON, не пустая строка/markdown."""
+    httpx_mock.add_response(json={"contacts": []})
+
+    rc = _run(["search-contacts", "--query", "zzz-no-match", "--json"], monkeypatch)
+
+    assert rc == 2
+    captured = capsys.readouterr()
+    data = json.loads(captured.out)
+    assert data == {"query": "zzz-no-match", "candidates": []}
+    assert captured.err == ""
+
+
+def test_ac_35_3_zero_matches_vs_network_error_are_distinguishable_by_exit_code_and_channel(
+    httpx_mock: HTTPXMock, monkeypatch, capsys
+):
+    """AC-35-3, DEV-009: было — 0 найдено и сетевой отказ делили один и тот же
+    `rc == 1`, различить их можно было только каналом (at-design «Замаскированный
+    отказ»). Теперь коды развели: `2` — 0 найдено (не отказ), `1` — отказ (сеть/
+    авторизация), `0` — найден хотя бы один. Различение по каналу остаётся верным
+    как дополнительная гарантия, не единственная."""
+    httpx_mock.add_response(json={"contacts": []})
+    rc_zero = _run(["search-contacts", "--query", "zzz-no-match"], monkeypatch)
+    zero_captured = capsys.readouterr()
+
+    assert rc_zero == 2
+    assert "Ничего не найдено" in zero_captured.out
+    assert zero_captured.err == ""
+
+    httpx_mock.add_exception(httpx.ConnectError("boom"))
+    rc_error = _run(["search-contacts", "--query", "zzz-no-match"], monkeypatch)
+    error_captured = capsys.readouterr()
+
+    assert rc_error == 1
+    assert "Ошибка:" in error_captured.err
+    assert error_captured.out == ""
+
+    assert rc_zero != rc_error  # DEV-009: коды больше не совпадают
 
 
 # === FR-36 — get-room ========================================================================
@@ -268,7 +323,6 @@ def test_ac_37_1_cli_error_text_passthrough_not_replaced_by_generic_message(
 
 
 def test_ac_38_1_meetings_commands_and_escalation_targets_are_all_registry_free():
-    from ktalk_mcp.cli import _REGISTRY_FREE_COMMANDS
 
     meetings_commands = {
         "list-calendar",

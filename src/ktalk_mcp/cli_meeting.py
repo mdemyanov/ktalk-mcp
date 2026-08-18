@@ -17,7 +17,12 @@ import sys
 from ktalk_mcp.client import KTalkClient
 from ktalk_mcp.config import Settings, redact_secrets
 from ktalk_mcp.confirmation import ConfirmationStore
-from ktalk_mcp.formatters import format_cancel_preview, format_meeting_preview, render_tool_output
+from ktalk_mcp.formatters import (
+    format_cancel_preview,
+    format_meeting_preview,
+    format_raw,
+    render_tool_output,
+)
 from ktalk_mcp.meeting_body import MissingFieldError, canonical_body_hash
 from ktalk_mcp.meeting_cancel import CancelPreviewService, build_cancel_confirmation_payload
 from ktalk_mcp.meeting_scheduling import PreviewService, cancel_meeting, create_meeting
@@ -88,9 +93,22 @@ def _add_cancel_args(parser: argparse.ArgumentParser) -> None:
 
 
 def register_subparsers(sub) -> None:
-    _add_meeting_args(sub.add_parser("create-meeting-preview", help="Предпросмотр встречи (FR-13)"))
+    # DEV-009: `--json` только на *-preview — операции без сети, безопасно
+    # добавить машиночитаемый вывод (NFR-20). *-confirm остаётся markdown-only:
+    # TTY-барьер уже делает его непригодным для автоматизации (NFR-22/NFR-23),
+    # промт-слой его не вызывает программно — машиночитаемый вывод там не нужен.
+    p_create_preview = sub.add_parser("create-meeting-preview", help="Предпросмотр встречи (FR-13)")
+    _add_meeting_args(p_create_preview)
+    p_create_preview.add_argument("--json", action="store_true")
+
     _add_meeting_args(sub.add_parser("create-meeting-confirm", help="Создать встречу (только TTY)"))
-    _add_cancel_args(sub.add_parser("cancel-meeting-preview", help="Предпросмотр отмены (ADR-011)"))
+
+    p_cancel_preview = sub.add_parser(
+        "cancel-meeting-preview", help="Предпросмотр отмены (ADR-011)"
+    )
+    _add_cancel_args(p_cancel_preview)
+    p_cancel_preview.add_argument("--json", action="store_true")
+
     _add_cancel_args(sub.add_parser("cancel-meeting-confirm", help="Отменить встречу (только TTY)"))
 
 
@@ -153,8 +171,15 @@ def cmd_create_meeting_preview(_reg, args: argparse.Namespace) -> int:
     except MissingFieldError as exc:
         _print_error(str(exc))
         return 1
-    data = {"body": body, "confirmation_id": confirmation_id}
-    print(render_tool_output(data, "markdown", format_meeting_preview))
+    if args.json:
+        # ADR-015: `confirmation_id` не переживает границу процессов — не входит
+        # в JSON, чтобы не выглядеть основанием для подтверждения из другого
+        # процесса. `body` — единственное, что нужно промт-слою для handoff-
+        # сообщения (то же значение выводится буквально в `create-meeting-confirm`).
+        print(format_raw({"body": body}))
+    else:
+        data = {"body": body, "confirmation_id": confirmation_id}
+        print(render_tool_output(data, "markdown", format_meeting_preview))
     return 0
 
 
@@ -228,8 +253,13 @@ def cmd_cancel_meeting_preview(_reg, args: argparse.Namespace) -> int:
     """Без TTY-барьера, без сети — только предпросмотр (ADR-011-spec §4)."""
     service = CancelPreviewService(ConfirmationStore())
     payload, confirmation_id = service.preview(id=args.id, reason=args.reason)
-    data = {"payload": payload, "confirmation_id": confirmation_id}
-    print(render_tool_output(data, "markdown", format_cancel_preview))
+    if args.json:
+        # ADR-015: см. cmd_create_meeting_preview — `confirmation_id` не входит
+        # в JSON, `payload` (id/reason) достаточно для handoff-сообщения.
+        print(format_raw({"payload": payload}))
+    else:
+        data = {"payload": payload, "confirmation_id": confirmation_id}
+        print(render_tool_output(data, "markdown", format_cancel_preview))
     return 0
 
 
