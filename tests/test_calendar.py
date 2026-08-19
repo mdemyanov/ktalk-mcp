@@ -337,18 +337,23 @@ async def test_fetch_segment_known_400_text_gives_plain_error_without_correlatio
     httpx_mock: HTTPXMock, base_url, session_token
 ):
     """400 с текстом из каталога Ф-26 -> обычная валидационная ошибка, без лишнего
-    сетевого вызова на корреляцию."""
+    сетевого вызова на корреляцию.
+
+    ADR-017 п.6: `start > end` теперь отклоняется в `split_window` до сети (см.
+    `test_fr39_calendar_inclusive_end.py::test_ac5_...`) — этот тест переключён на
+    валидный `start < end` и другой известный 400-текст каталога Ф-26, чтобы
+    по-прежнему бить в сеть и проверять решающую таблицу `_fetch_segment`."""
     from ktalk_mcp.calendar_reader import get_calendar_window
     from ktalk_mcp.client import KTalkClient, KTalkError
     from ktalk_mcp.contour_diagnostics import ContourDriftError
 
     httpx_mock.add_response(
-        status_code=400, text="Дата окончания должна быть больше даты начала"
+        status_code=400, text="Период запроса не должен превышать 7 дней"
     )
 
     async with KTalkClient(base_url=base_url, session_token=session_token) as client:
         with pytest.raises(KTalkError) as exc_info:
-            await get_calendar_window(client, date(2026, 8, 7), date(2026, 8, 1))
+            await get_calendar_window(client, date(2026, 8, 1), date(2026, 8, 7))
         assert not isinstance(exc_info.value, ContourDriftError)
 
     assert len(httpx_mock.get_requests()) == 1

@@ -40,8 +40,8 @@ def register_subparsers(sub) -> None:
     p_chat.add_argument("--json", action="store_true")
 
     p_cal = sub.add_parser("list-calendar", help="Календарь встреч (сеть, FR-18)")
-    p_cal.add_argument("--start", required=True)
-    p_cal.add_argument("--end", required=True)
+    p_cal.add_argument("--start", required=True, help="Начало окна (ISO 8601), включительно")
+    p_cal.add_argument("--end", required=True, help="Конец окна (ISO 8601), включительно")
     p_cal.add_argument("--room-name", default=None)
     p_cal.add_argument("--json", action="store_true")
 

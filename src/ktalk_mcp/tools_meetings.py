@@ -92,8 +92,8 @@ def register(mcp: FastMCP) -> None:
         segments hitting the 100-item cap are flagged.
 
         Args:
-            start: Window start date (ISO 8601), required
-            end: Window end date (ISO 8601), required
+            start: Window start date (ISO 8601), required, inclusive
+            end: Window end date (ISO 8601), required, inclusive (FR-39/ADR-017)
             room_name: Optional filter by room name
             format: Output format — "raw" (JSON) or "markdown"
         """

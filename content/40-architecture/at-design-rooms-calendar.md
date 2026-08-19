@@ -61,6 +61,23 @@ FR-13, FR-19, NFR-6..NFR-10). Архитектурный контекст — [r
 | — (доп., §5.5 решающая таблица) | 200 без `items` -> drift без корреляции; известный 400 -> обычная ошибка без корреляции; неизвестный 400 -> корреляция+drift; сетевая ошибка -> корреляция+drift | подсчёт запросов (1 vs 2) + тип исключения | unit | `test_fetch_segment_200_items_absent_raises_contour_drift_without_correlation`, `test_fetch_segment_known_400_text_gives_plain_error_without_correlation`, `test_fetch_segment_unknown_400_text_triggers_correlation_and_drift`, `test_fetch_segment_network_error_triggers_correlation_and_drift`, `test_known_400_texts_catalog_matches_f26_dословно` | red (stub) |
 | NFR-7 (доп.) | `get_calendar`/api-key -> отказ до сети (ADR-004 п.2, «без записи» несмотря на живой 200) | `OperationNotAvailableError`, 0 запросов | unit | `test_nfr7_get_calendar_apikey_mode_refuses_before_network_call` | red (stub) |
 
+### FR-39 — включительная правая граница окна чтения календаря (`tests/test_fr39_calendar_inclusive_end.py`, ревизия волны 7, QA-009)
+
+Мок сервера в этих тестах — честный: фильтрует фикстуры по `[start 00:00, end 00:00)`
+РЕАЛЬНО запрошенных параметров (Ф-60 RES-004), не отдаёт заготовленный список — ловит
+любую реализацию, не компенсирующую полуоткрытость, включая текущую. `AC-3`/доп. тест
+на стыке специально изолируют «потерю на стыке сегментов» от «потери на правом крае
+всего окна» — фикс, чинящий только последний сегмент, здесь всё равно красный.
+
+| AC ID | Формулировка (кратко) | Assertion outline | Тип | Тест-функция | Статус |
+|---|---|---|---|---|---|
+| FR-39 AC-1 | CLI `--start D --end D` -> встречи дня D | `ids == {"E1"}` на честном моке дня D | integration | `test_ac1_cli_single_day_window_returns_that_days_meetings` | red (stub) |
+| FR-39 AC-2 | MCP `ktalk_list_calendar` даёт тот же результат, что CLI, на том же окне | `ids == {"E1"}` через `tool.fn(...)` с реальным `get_shared_client()` | integration | `test_ac2_mcp_single_day_window_matches_cli_result` | red (stub) |
+| FR-39 AC-3 | Окно шире 7 дней (17-30) -> все 14 дней, без потерь и без дублей на стыках | множество id совпадает с `{E17..E30}`; отдельно — узкий тест на день 23 (стык сегментов (17,23)/(24,30)), изолированно от правого края окна (30) | integration | `test_ac3_wide_window_17_to_30_covers_every_day_no_loss_no_dup`, `test_ac3_stitch_boundary_day_23_not_lost_not_just_right_edge_day_30` | red (stub) |
+| FR-39 AC-4 | Три однодневных окна (начало/середина/конец диапазона) -> каждое отдаёт встречу своего дня | параметризовано на 17/20/23 августа | integration | `test_ac4_single_day_window_at_start_middle_end_returns_that_day[...]` (×3) | red (stub) |
+| FR-39 AC-5 | `start > end` отклоняется до сети, кодом != 0, без пересказа сырого 400 | `rc != 0`, `httpx_mock.get_requests() == []`, сырой текст Ф-64 отсутствует в stderr | integration | `test_ac5_start_after_end_rejected_before_network_call` | red (stub) |
+| FR-39 AC-6 | Честное «пусто» (код 0) и отклонённый ввод (код != 0) не делят код возврата; замаскированный отказ (день с реальной встречей молча даёт «пусто») недопустим | `rc_empty != rc_invalid`; отдельно — день с событием не должен вернуть `items == []` при коде 0 | integration | `test_ac6_honest_empty_day_and_rejected_reversed_window_never_share_exit_code`, `test_ac6_masked_failure_day_with_real_events_must_not_report_as_honest_empty` | red (stub) (первый тест зелёный уже сегодня — коды и так различны, второй красный) |
+
 ### FR-13 — планирование встречи (`tests/test_meeting_body.py`, `test_confirmation.py`, `test_meeting_scheduling.py`, `test_cli_meeting.py`)
 
 | AC ID | Формулировка (кратко) | Assertion outline | Тип | Тест-функция / файл | Статус |
@@ -275,3 +292,61 @@ stubs этой задачи), 172 passed (163 существующих регр�
 реализована; правка `test_nfr10_secret_not_in_get_room_error_message`/
 `test_nfr10_secret_not_in_calendar_error_message` описана выше в разделе NFR-10). `uv run ruff
 check tests/` — чист. `bash scripts/check.sh --fast` — `Errors: 0`.
+
+## Ревизия FR-39 (волна 7, QA-009, 2026-08-19) — включительная правая граница окна
+
+Дополняет секцию «FR-39» выше (таблица покрытия AC). Отдельный failing-stub-файл
+`tests/test_fr39_calendar_inclusive_end.py` (не расширение `test_calendar.py` — самостоятельный
+дефект боевой поверхности, отдельный от исходной волны 0.6.0, по аналогии с
+`test_fr19_auth_status.py`/`test_fr21_no_vault_layout.py`).
+
+**Boundary cases FR-39 (сверх дословных AC):**
+- Три однодневных окна на разных позициях многодневного диапазона (начало/середина/конец,
+  17/20/23 августа) — не только `start == end` в отрыве от контекста.
+- Стык двух смежных сегментов сегментации (17-23 / 24-30) изолирован от правого края всего
+  окна отдельным узким тестом — фикс, чинящий только последний сегмент, не проходит.
+- Честно пустой день (в фикстуре нет событий вообще) — граница между «нет данных» и «данные
+  есть, но граница их не отдаёт» проверяется явно (AC-6, два теста).
+
+**Error cases FR-39 — оба класса, явно:**
+- **Испорченный/опечатанный ввод** (целевой пользователь перепутал местами `--start`/`--end`):
+  `start > end` — `test_ac5_start_after_end_rejected_before_network_call`. Второй класс
+  испорченного ввода для этого требования (например, невалидный формат даты) не добавляется
+  здесь отдельно — уже покрыт вне FR-39 (`test_list_calendar_malformed_start_date_fails_closed_not_traceback`,
+  `tests/test_cli_meetings_surface.py`), FR-39 узко про перепутанные границы, не про формат.
+- **Замаскированный отказ** (система молча отдаёт «пусто» вместо наблюдаемой ошибки): день с
+  реальной встречей, потерянной полуоткрытой границей, возвращает код 0 и `items == []` —
+  неотличимо от честного «встреч нет» —
+  `test_ac6_masked_failure_day_with_real_events_must_not_report_as_honest_empty`.
+
+**Мок — честный, не заготовленный.** `_honest_calendar_callback` в тест-файле вычисляет ответ
+по РЕАЛЬНО полученным `start`/`end` из `request.url.params`, применяя `[start 00:00, end 00:00)`
+(Ф-60), лимит `(end-start).days<=7` (Ф-63) и текст 400 при `start>end` (Ф-64) — тест ловит
+любую реализацию, которая не компенсирует полуоткрытость (включая сегодняшнюю), а не только
+конкретную форму будущего фикса.
+
+**Допущение, отменяющее прежнее ограничение волны 0.6.0.** Секция «Допущения» выше фиксировала:
+«ни один stub этой волны не вызывает MCP-инструменты, которые реально дошли бы до сети через
+`get_shared_client()`» — AC-2 FR-39 требует именно этого (паритет CLI/MCP на честном сетевом
+моке). Решение: `monkeypatch.setattr(client_module, "_shared_client", None)` перед каждым
+вызовом — `monkeypatch` откатывает изменение автоматически после теста, межтестовой утечки нет
+(тот же механизм, которым `test_cli_meetings_surface.py` уже штатно управляет `KTALK_*`
+env-переменными). Синглтон не закрывается (`aclose()` не вызывается) — тот же риск уже
+принимается самим MCP-сервером на весь процесс его жизни, не новый для тестов.
+
+**Прогон на момент написания (до реализации Dev, DEV-013):** `uv run --with pytest-xdist --with
+pytest pytest tests/ -q -n 8` — 9 failed (все стабы этой задачи, `tests/test_fr39_calendar_inclusive_end.py`),
+505 passed (весь остальной набор, включая существующий `test_calendar.py`, не тронут).
+`bash scripts/check.sh --fast` — см. итог ниже.
+
+**Существующий `test_split_window_single_day_start_equals_end` (`tests/test_calendar.py:80`) —
+не тронут, флаг для Dev, не факт дефекта.** Тест сегодня зелёный и проверяет только форму
+кортежа сегментов (`split_window(D, D) == [(D, D)]`), не сетевое поведение — он не ловит
+дефект FR-39, потому что дефект живёт в том, как `seg_end` подаётся в исключающий параметр
+`end` сервера (`_fetch_segment`), не в форме, которую возвращает сама `split_window`. Останется
+ли этот тест валидным после ADR-017/DEV-013 — зависит от того, где SA решит разместить
+компенсацию полуоткрытости: если она войдёт в `_fetch_segment`/сетевой параметр (значения
+`split_window` как календарные даты не меняются) — тест переживёт фикс как есть; если SA
+перенесёт исключающую семантику в саму `split_window` (сегменты станут «сетевыми», не
+«календарными») — тест сломается и должен быть переписан Dev'ом осознанно, не мной сейчас
+(ADR-017 на момент этой задачи не написан).

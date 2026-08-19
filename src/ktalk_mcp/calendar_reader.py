@@ -57,9 +57,8 @@ def split_window(start: date, end: date, *, max_days: int = 7) -> list[tuple[dat
     """Непересекающиеся сегменты <=`max_days` дней без пропусков и без перекрытия:
     следующий сегмент начинается на день позже конца предыдущего."""
     if start > end:
-        # Не наша забота нормализовать — сервер сам отвечает известным 400
-        # ("Дата окончания должна быть больше даты начала", Ф-26), один сегмент как есть.
-        return [(start, end)]
+        # ADR-017 п.6: отказ до сети — единственная общая точка входа CLI/MCP.
+        raise KTalkError("Дата начала окна не может быть позже даты конца.")
     segments: list[tuple[date, date]] = []
     seg_start = start
     while seg_start <= end:
@@ -91,9 +90,14 @@ async def _fetch_segment(
     client: KTalkClient, seg_start: date, seg_end: date, room_name: str | None
 ) -> tuple[list[dict], bool]:
     profile = client._profile_for("get_calendar")  # noqa: SLF001 - fail-closed (api-key)
+    # ADR-017 п.1-2: сервер держит `end` полуоткрытой ([start 00:00, end 00:00),
+    # Ф-60 RES-004) — сегментация (`split_window`) оперирует включительными датами,
+    # компенсация исключающей границы сервера — обязанность этого тонкого слоя.
+    # Голая дата +1 день, не явное время конца суток (не зависит от часового базиса,
+    # Ф-62 — см. ADR-017 п.2/7).
     params: dict = {
         "start": seg_start.isoformat(),
-        "end": seg_end.isoformat(),
+        "end": (seg_end + timedelta(days=1)).isoformat(),
         "take": _PAGE_SIZE,
     }
     if room_name is not None:
