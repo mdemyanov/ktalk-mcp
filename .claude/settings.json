@@ -1,20 +1,33 @@
 {
   "enabledPlugins": {
-    "nauta@nauta": true,
-    "gramax@gramax-marketplace": true
+    "gramax@gramax-marketplace": true,
+    "nauta@nauta": true
   },
   "extraKnownMarketplaces": {
+    "gramax-marketplace": {
+      "source": {
+        "repo": "mdemyanov/gramax-plugin",
+        "source": "github"
+      }
+    },
     "nauta": {
       "source": {
         "source": "git",
         "url": "https://doc-hub.gitlab.yandexcloud.net/tools-ai/nauta.git"
       }
-    },
-    "gramax-marketplace": {
-      "source": {
-        "source": "github",
-        "repo": "mdemyanov/gramax-plugin"
-      }
     }
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "command": "bd prime --hook-json",
+            "type": "command"
+          }
+        ],
+        "matcher": ""
+      }
+    ]
   }
 }

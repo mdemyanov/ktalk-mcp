@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "embedded",
+  "dolt_database": "ktalk_mcp",
+  "project_id": "6d14934b-4d54-46f1-a3ac-ae052a6a3b95"
+}

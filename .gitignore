@@ -19,3 +19,10 @@ venv/
 docs/*-recording.json
 docs/calendar
 docs/*.har
+
+# Beads / Dolt files (added by bd init)
+.dolt/
+*.db
+.beads-credential-key
+.beads/proxieddb/
+*.gate.lock*
