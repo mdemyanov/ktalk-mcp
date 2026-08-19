@@ -12,6 +12,8 @@ title: Требования
 | [Плагин ktalk в произвольном проекте](ktalk-plugin.md) | Pilot | Draft |
 | [Онбординг плагина ktalk — обнаружение зависимости и санкционированная установка](ktalk-plugin-onboarding.md) | Pilot | Draft |
 | [Промт-поверхность плагина ktalk — расписание, встречи, участники, диагностика](ktalk-plugin-meetings.md) | Pilot | Draft |
+| [Калибровка извлечения обязательств в промте анализа плагина ktalk](ktalk-plugin-analysis-calibration.md) | Pilot | Draft |
+| [Канал дефектов промта](ktalk-prompt-defect-channel.md) | Pilot | Draft |
 
 Функциональность v0.1–v0.4 разрабатывалась по спекам в
 [docs/superpowers/specs/](../../docs/superpowers/specs/) до подключения контура. Ретроспективно
