@@ -17,9 +17,12 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from datetime import UTC, datetime
 
 from ktalk_mcp.client import KTalkError
+
+_TIMEZONE_RE = re.compile(r"^GMT[+-](?:[0-9]|1[0-4])$")
 
 # ADR-009 §1-2: 12 полей от вызывающего/архитектуры + `description` с тихим
 # дефолтом = 13 ключей тела. `pinCode`/`anonymousAccessExpirationDate` не входят
@@ -61,6 +64,24 @@ class MissingFieldError(KTalkError):
         self.field = field
 
 
+class TimezoneFormatError(KTalkError):
+    """Форма `timezone` не распознана — отказ до сетевого вызова (FR-40).
+
+    ГИПОТЕЗА: диапазон `GMT-14..GMT+14` не измерен целиком, подтверждено
+    замером только `GMT+3` (rooms-calendar-scheduling.md:357-368,
+    ADR-020 §3). Границы взяты по общемировому диапазону смещений UTC, не по
+    факту API — ревизуются следующим боевым замером с иным значением.
+    """
+
+    def __init__(self, value: str) -> None:
+        super().__init__(
+            f'Часовой пояс «{value}» не распознан. Требуемый формат: `GMT±N` '
+            "(пример: `GMT+3`). Другие нотации (IANA, Windows ID, ISO-смещение, "
+            "аббревиатуры) сервер не принимает — см. FR-40."
+        )
+        self.value = value
+
+
 def build_required_attendees(keys: list[str]) -> list[dict]:
     """ADR-009 §4: `requiredUserKeys` (список логинов) заменён на список объектов
     `{"type": "user", "key": str}` — `key` числовой id строкой (снимок сериализует
@@ -100,6 +121,10 @@ def build_meeting_body(
     значения — нет. `description` — единственное поле с разрешённым тихим
     дефолтом (пустая строка, NFR-9). `pinCode`/`anonymousAccessExpirationDate`
     решаются отдельными условными правилами (ADR-009 §2-3), не общим циклом.
+
+    `timezone` принимает единственную форму `GMT±N` (пример `GMT+3`, диапазон
+    `GMT-14..GMT+14`, ГИПОТЕЗА — измерен только `GMT+3`). Другая нотация
+    отклоняется `TimezoneFormatError` до сборки тела.
     """
     body = {
         "subject": subject,
@@ -119,6 +144,8 @@ def build_meeting_body(
     for field in _REQUIRED:
         if body[field] is None:
             raise MissingFieldError(field)
+    if not _TIMEZONE_RE.match(body["timezone"]):
+        raise TimezoneFormatError(body["timezone"])
 
     # ADR-009 §2: `pin_code_explicit_none=True` побеждает при одновременной
     # передаче обоих сигналов — «решено: нет PIN» перекрывает конкретное

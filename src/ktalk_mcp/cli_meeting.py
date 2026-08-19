@@ -27,7 +27,7 @@ from ktalk_mcp.formatters import (
     format_raw,
     render_tool_output,
 )
-from ktalk_mcp.meeting_body import MissingFieldError
+from ktalk_mcp.meeting_body import MissingFieldError, TimezoneFormatError
 from ktalk_mcp.meeting_cancel import CancelPreviewService
 from ktalk_mcp.meeting_scheduling import PreviewService
 
@@ -49,7 +49,7 @@ def cmd_create_meeting_preview(_reg, args: argparse.Namespace) -> int:
     service = PreviewService(ConfirmationStore())
     try:
         body, confirmation_id = service.preview(**meeting_kwargs(args))
-    except MissingFieldError as exc:
+    except (MissingFieldError, TimezoneFormatError) as exc:
         print_error(str(exc))
         return 1
     data = {"body": body, "confirmation_id": confirmation_id}

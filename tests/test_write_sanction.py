@@ -205,7 +205,7 @@ def test_injection_like_subject_does_not_change_body_or_sanction():
         subject=hostile,
         start="2026-08-20T10:00:00+03:00",
         end="2026-08-20T11:00:00+03:00",
-        timezone="Europe/Moscow",
+        timezone="GMT+3",
         room_name="synthetic-room",
         required_attendee_keys=["1001"],
         description=None,

@@ -28,7 +28,11 @@ def add_meeting_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--subject", default=None)
     parser.add_argument("--start", default=None)
     parser.add_argument("--end", default=None)
-    parser.add_argument("--timezone", default=None)
+    parser.add_argument(
+        "--timezone",
+        default=None,
+        help="Формат GMT±N, пример: GMT+3 (единственная подтверждённая форма, FR-40)",
+    )
     parser.add_argument("--room-name", default=None)
     # ADR-009 §5: `--required-user-key` (логин) переименован в `--required-attendee-key`
     # (числовой id) — резолюция логина в id не реализуется этим ADR, оператор

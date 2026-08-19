@@ -37,7 +37,7 @@ from ktalk_mcp.formatters import (
     format_meeting_preview,
     render_tool_output,
 )
-from ktalk_mcp.meeting_body import MissingFieldError, canonical_body_hash
+from ktalk_mcp.meeting_body import MissingFieldError, TimezoneFormatError, canonical_body_hash
 from ktalk_mcp.meeting_cancel import CancelPreviewService, build_cancel_confirmation_payload
 from ktalk_mcp.meeting_scheduling import PreviewService, cancel_meeting, create_meeting
 from ktalk_mcp.write_journal import JournalUnavailableError, append_attempt, append_outcome
@@ -129,7 +129,7 @@ def _run_confirm(operation, args, *, preview, formatter, prompt, network, descri
     store = ConfirmationStore()
     try:
         body, own_confirmation_id = preview(store)
-    except MissingFieldError as exc:
+    except (MissingFieldError, TimezoneFormatError) as exc:
         print_error(str(exc))
         return EXIT_ERROR
 

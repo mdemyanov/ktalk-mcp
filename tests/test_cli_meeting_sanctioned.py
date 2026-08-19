@@ -23,7 +23,7 @@ _MEETING_ARGS = [
     "--end",
     "2026-08-20T11:00:00+03:00",
     "--timezone",
-    "Europe/Moscow",
+    "GMT+3",
     "--room-name",
     "synthetic-room",
     "--required-attendee-key",

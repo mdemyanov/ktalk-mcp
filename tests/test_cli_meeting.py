@@ -41,7 +41,7 @@ _PREVIEW_ARGV_FULL = [
     "--end",
     "2026-08-15T11:00:00+03:00",
     "--timezone",
-    "Europe/Moscow",
+    "GMT+3",
     "--room-name",
     "test-room-alpha",
     "--required-attendee-key",

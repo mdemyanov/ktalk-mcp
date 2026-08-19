@@ -23,7 +23,7 @@ FULL_KWARGS = {
     "subject": "Синтетическая встреча",
     "start": "2026-08-15T10:00:00+03:00",
     "end": "2026-08-15T11:00:00+03:00",
-    "timezone": "Europe/Moscow",
+    "timezone": "GMT+3",
     "room_name": "test-room-alpha",
     "required_attendee_keys": ["1001", "1002"],
     "description": "Синтетическое описание",
