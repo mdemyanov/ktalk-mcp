@@ -38,6 +38,8 @@ from ktalk_mcp.cli_meetings_read import (
 from ktalk_mcp.cli_meetings_read import register_subparsers as register_meetings_read_subparsers
 from ktalk_mcp.cli_sanction import cmd_sanction
 from ktalk_mcp.cli_sanction import register_subparsers as register_sanction_subparsers
+from ktalk_mcp.cli_token import cmd_token
+from ktalk_mcp.cli_token import register_subparsers as register_token_subparsers
 from ktalk_mcp.cli_store import cmd_migrate_to_central_store
 from ktalk_mcp.cli_store import register_subparsers as register_store_subparsers
 from ktalk_mcp.cli_sync import cmd_auth_status, cmd_sync
@@ -117,6 +119,7 @@ def build_parser() -> argparse.ArgumentParser:
     register_meeting_subparsers(sub)
     register_meeting_confirm_subparsers(sub)
     register_sanction_subparsers(sub)
+    register_token_subparsers(sub)
     register_contacts_subparsers(sub)
     register_content_subparsers(sub)
     register_meetings_read_subparsers(sub)
@@ -295,6 +298,8 @@ _REGISTRY_FREE_COMMANDS = {
     "search-contacts",
     # ADR-016: санкция на запись — файл в $XDG_CONFIG_HOME, реестр не при чём.
     "sanction",
+    # То же основание: файл session-токена (token_file.py) — секрет, не реестр.
+    "token",
     # DEV-002 волны 3 (ADR-012 §2а): читающие CLI-эквиваленты MCP-инструментов —
     # только сеть, реестр SQLite не открывают.
     "list-recordings",
@@ -337,6 +342,7 @@ _HANDLERS = {
     "cancel-meeting-confirm": cmd_cancel_meeting_confirm,
     "search-contacts": cmd_search_contacts,
     "sanction": cmd_sanction,
+    "token": cmd_token,
     "list-recordings": cmd_list_recordings,
     "get-recording": cmd_get_recording,
     "get-transcript": cmd_get_transcript,

@@ -3,7 +3,7 @@ from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 if TYPE_CHECKING:
@@ -79,6 +79,29 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
+    @model_validator(mode="after")
+    def _fall_back_to_token_file(self) -> "Settings":
+        """Третий источник сессии — файл `~/.config/ktalk-mcp/token` (token_file.py).
+
+        Подставляется здесь, а не в `.auth_mode`, чтобы у файла и у переменной
+        окружения была ровно одна точка входа в модель: всё остальное (приоритет
+        ключа, `auth_credential`, барьер маскирования `redact_secrets`) продолжает
+        читать одно поле и о существовании файла не знает.
+
+        Порядок источников: `KTALK_PERSONAL_API_KEY` > `KTALK_SESSION_TOKEN` > файл.
+        Файл читается только когда пусты ОБЕ переменные — заданное окружение
+        сильнее лежащего на диске, иначе протухший файл молча перебивал бы токен,
+        который оператор передал явно.
+        """
+        if self.ktalk_personal_api_key or self.ktalk_session_token:
+            return self
+        from ktalk_mcp.token_file import read_token
+
+        token = read_token()
+        if token:
+            object.__setattr__(self, "ktalk_session_token", token)
+        return self
+
     @property
     def auth_mode(self) -> AuthMode:
         if self.ktalk_personal_api_key:
@@ -86,8 +109,9 @@ class Settings(BaseSettings):
         if self.ktalk_session_token:
             return AuthMode.SESSION
         raise KTalkConfigError(
-            "Не задана ни KTALK_PERSONAL_API_KEY, ни KTALK_SESSION_TOKEN. "
-            "Укажите одну из переменных (см. README)."
+            "Не задана ни KTALK_PERSONAL_API_KEY, ни KTALK_SESSION_TOKEN, "
+            "и файла токена нет. Задайте переменную или выполните "
+            "`ktalk token set -` (см. README)."
         )
 
     @property

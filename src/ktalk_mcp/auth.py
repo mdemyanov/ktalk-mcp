@@ -87,7 +87,7 @@ def classify_response(
                 401,
             )
         raise _auth_error(
-            "Токен сессии истёк или невалиден. Обновите KTALK_SESSION_TOKEN (см. README).", 401
+            "Токен сессии истёк или невалиден. Обновите его: `ktalk token set -` (или переменную KTALK_SESSION_TOKEN, если она задана) — см. README.", 401
         )
     if status == 403:
         if mode is AuthMode.API_KEY:
