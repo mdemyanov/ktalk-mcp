@@ -114,12 +114,36 @@ class KTalkClient:
         self._classify(response, required_scope)
 
     def _profile_for(self, operation: str) -> EndpointProfile:
-        profile = OPERATION_PROFILES.get(operation, {}).get(self._auth.mode)
+        """Code review (epic-capability-pairing, Р1/Р2): текст отказа обязан называть
+        режим, реально подтверждённый для операции (`OPERATION_PROFILES`), не
+        зашитый заранее «режим ключа» — верно ровно для `list_archive`, для
+        `get_room`/`get_calendar`/`create_meeting`/`cancel_meeting`/`search_contacts`
+        (все пять подтверждены только под session, `AuthMode.API_KEY: None`)
+        пользователю с ключом раньше советовали включить ключ, которым он уже
+        пользуется."""
+        profiles = OPERATION_PROFILES.get(operation, {})
+        profile = profiles.get(self._auth.mode)
         if profile is None:
             label = OPERATION_LABELS.get(operation, operation)
+            required_mode = next(
+                (mode for mode, candidate in profiles.items() if candidate is not None),
+                None,
+            )
+            if required_mode is AuthMode.SESSION:
+                raise OperationNotAvailableError(
+                    f"Операция «{label}» доступна только в режиме сессии "
+                    "(переменная KTALK_SESSION_TOKEN)."
+                )
+            if required_mode is AuthMode.API_KEY:
+                raise OperationNotAvailableError(
+                    f"Операция «{label}» доступна только в режиме персонального ключа "
+                    "(переменная KTALK_PERSONAL_API_KEY)."
+                )
+            # Операция вне OPERATION_PROFILES вовсе (например, update_meeting,
+            # ADR-011 п.5) — ни один режим её не подтверждает, называть конкретный
+            # режим было бы неверно.
             raise OperationNotAvailableError(
-                f"Операция «{label}» доступна только в режиме персонального ключа "
-                "(переменная KTALK_PERSONAL_API_KEY)."
+                f"Операция «{label}» недоступна ни в одном режиме авторизации."
             )
         return profile
 

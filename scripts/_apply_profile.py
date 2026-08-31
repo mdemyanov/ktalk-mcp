@@ -49,7 +49,7 @@ def load_manifest(profile_dir: Path) -> dict:
     try:
         return parse_yaml_file(manifest_path)
     except MalformedYamlError as e:
-        # Мутатор прерывается — работать по нечитаемому входу нельзя (ADR-007 Д5).
+        # Сценарий «The mutator aborts» — работать по нечитаемому входу нельзя (ADR-007 Д5).
         raise ProfileError(str(e)) from e
 
 

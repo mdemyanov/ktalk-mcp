@@ -17,6 +17,8 @@ mainpart/ktalk-mcp](../10-domain/research/mainpart-ktalk-mcp.md), эмпирич
 (PM, 2026-08-13, session-режим — часть 1; повторным заходом в тот же день, после выдачи
 персонального ключа, — api-key-режим, части 2–3).
 
+**Capability:** `openspec/specs/talk-api-auth-modes/spec.md`, `openspec/specs/recording-data-access/spec.md`, `openspec/specs/registry-sync-window/spec.md`
+
 ## JTBD
 
 Когда сессионный токен Контур.Толка протухает без предупреждения и `ktalk sync` перестаёт

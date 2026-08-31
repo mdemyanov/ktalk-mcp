@@ -17,6 +17,8 @@ properties:
 /calendar`), факты о комнате из постановки владельца §5 (живой зонд `GET /api/rooms/{roomName}`),
 [ADR-003 — режимы авторизации](../00-project/adr/ADR-003-auth-modes.md).
 
+**Capability:** `openspec/specs/room-diagnostics/spec.md`, `openspec/specs/calendar-window-reading/spec.md`, `openspec/specs/meeting-scheduling/spec.md`
+
 ## JTBD
 
 Когда нужно запланировать встречу в Толке или свериться с занятостью комнаты и расписания, не

@@ -383,12 +383,15 @@ async def test_nfr7_create_meeting_apikey_mode_refuses_before_network_call(
     httpx_mock: HTTPXMock, base_url, personal_api_key
 ):
     """`create_meeting`/api-key не проверено вовсе ни одним сигналом -> отказ до
-    сети, тот же принцип, что `get_room`/api-key."""
+    сети, тот же принцип, что `get_room`/api-key.
+
+    Code review (epic-capability-pairing, Р1/Р2): `create_meeting` подтверждён
+    только под session — сообщение обязано советовать её, не ключ."""
     from ktalk_mcp.client import KTalkClient, OperationNotAvailableError
     from ktalk_mcp.meeting_scheduling import create_meeting
 
     async with KTalkClient(base_url=base_url, personal_api_key=personal_api_key) as client:
-        with pytest.raises(OperationNotAvailableError):
+        with pytest.raises(OperationNotAvailableError, match="режиме сессии"):
             await create_meeting(client, {"subject": "X"})
 
     assert httpx_mock.get_requests() == []

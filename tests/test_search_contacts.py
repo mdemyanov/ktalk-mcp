@@ -213,11 +213,15 @@ async def test_ac_10_5_secret_not_in_multi_match_output(
 
 
 async def test_ac_10_5_secret_not_in_apikey_refusal_message(base_url, personal_api_key):
+    """Code review (epic-capability-pairing, Р1/Р2): `search_contacts` подтверждён
+    только под session (`endpoints.py`) — сообщение обязано советовать включить
+    сессию, не ключ (`match=` — иначе тест не может провалиться на неверном
+    тексте)."""
     from ktalk_mcp.client import KTalkClient, OperationNotAvailableError
     from ktalk_mcp.contacts import search_contacts
 
     async with KTalkClient(base_url=base_url, personal_api_key=personal_api_key) as client:
-        with pytest.raises(OperationNotAvailableError) as exc_info:
+        with pytest.raises(OperationNotAvailableError, match="режиме сессии") as exc_info:
             await search_contacts(client, FIXTURES_QUERY)
 
     assert personal_api_key not in str(exc_info.value)

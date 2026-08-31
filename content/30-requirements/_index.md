@@ -10,10 +10,10 @@ title: Требования
 | [Персональный API-ключ и расширение возможностей](personal-api-key.md) | Production | Draft |
 | [Комнаты, календарь и планирование встреч](rooms-calendar-scheduling.md) | Production | Draft |
 | [Плагин ktalk в произвольном проекте](ktalk-plugin.md) | Pilot | Draft |
-| [Онбординг плагина ktalk — обнаружение зависимости и санкционированная установка](ktalk-plugin-onboarding.md) | Pilot | Draft |
-| [Промт-поверхность плагина ktalk — расписание, встречи, участники, диагностика](ktalk-plugin-meetings.md) | Pilot | Draft |
-| [Калибровка извлечения обязательств в промте анализа плагина ktalk](ktalk-plugin-analysis-calibration.md) | Pilot | Draft |
-| [Канал дефектов промта](ktalk-prompt-defect-channel.md) | Pilot | Draft |
+| [Онбординг плагина ktalk](ktalk-plugin-onboarding.md) | — | Переехало в `ktalk-plugin` |
+| [Промт-поверхность плагина ktalk](ktalk-plugin-meetings.md) | — | Переехало в `ktalk-plugin` |
+| [Калибровка промта анализа](ktalk-plugin-analysis-calibration.md) | — | Переехало в `ktalk-plugin` |
+| [Канал дефектов промта](ktalk-prompt-defect-channel.md) | — | Переехало в `ktalk-plugin` |
 
 Функциональность v0.1–v0.4 разрабатывалась по спекам в
 [docs/superpowers/specs/](../../docs/superpowers/specs/) до подключения контура. Ретроспективно

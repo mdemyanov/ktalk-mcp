@@ -393,12 +393,15 @@ async def test_nfr7_get_calendar_apikey_mode_refuses_before_network_call(
     httpx_mock: HTTPXMock, base_url, personal_api_key
 ):
     """`get_calendar`/api-key остаётся «без записи» (ADR-004 п.2) несмотря на
-    наблюдавшийся живой 200 — не переносится в «рабочий» профиль этой волной."""
+    наблюдавшийся живой 200 — не переносится в «рабочий» профиль этой волной.
+
+    Code review (epic-capability-pairing, Р1/Р2): `get_calendar` подтверждён только
+    под session — сообщение обязано советовать её, не ключ."""
     from ktalk_mcp.calendar_reader import get_calendar_window
     from ktalk_mcp.client import KTalkClient, OperationNotAvailableError
 
     async with KTalkClient(base_url=base_url, personal_api_key=personal_api_key) as client:
-        with pytest.raises(OperationNotAvailableError):
+        with pytest.raises(OperationNotAvailableError, match="режиме сессии"):
             await get_calendar_window(client, date(2026, 8, 1), date(2026, 8, 7))
 
     assert httpx_mock.get_requests() == []
