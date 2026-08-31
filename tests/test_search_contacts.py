@@ -1,6 +1,6 @@
 """AT-design: ADR-010 — резолюция участника через справочник контактов
-(`ktalk_mcp.contacts` — предполагаемое имя нового модуля, симметрично
-`ktalk_mcp.rooms`; `search_contacts(client, query)` — свободная функция вне
+(`ktalk_cli.contacts` — предполагаемое имя нового модуля, симметрично
+`ktalk_cli.rooms`; `search_contacts(client, query)` — свободная функция вне
 `client.py`, гейт C13, по образцу `rooms.get_room`).
 
 Покрывает контракт с QA-author ADR-010-spec: 0/1/>1 совпадений без автовыбора,
@@ -9,7 +9,7 @@ allow-list компоновщиком `build_meeting_body` (резолюция �
 внутрь), запрос формируется с фиксированными `top=25`/`fillInMeetingStatus=
 false`/`includeKiosks=true`.
 
-Красные по замыслу: `ktalk_mcp.contacts` не существует.
+Красные по замыслу: `ktalk_cli.contacts` не существует.
 """
 
 from __future__ import annotations
@@ -57,8 +57,8 @@ def _candidate(key: str, surname: str, firstname: str, post: str = "") -> dict:
 async def test_ac_10_1_zero_matches_search_contacts_returns_empty_list(
     httpx_mock: HTTPXMock, base_url, session_token
 ):
-    from ktalk_mcp.client import KTalkClient
-    from ktalk_mcp.contacts import search_contacts
+    from ktalk_cli.client import KTalkClient
+    from ktalk_cli.contacts import search_contacts
 
     httpx_mock.add_response(json={"contacts": []})
 
@@ -79,7 +79,7 @@ def test_ac_10_1_zero_matches_cli_message_names_the_query_and_nonzero_exit(
     monkeypatch.delenv("KTALK_PERSONAL_API_KEY", raising=False)
     httpx_mock.add_response(json={"contacts": []})
 
-    from ktalk_mcp.cli import main
+    from ktalk_cli.cli import main
 
     rc = main(
         ["--db", "/nonexistent/does-not-exist.db", "search-contacts", "--query", "zzz-no-match"]
@@ -97,8 +97,8 @@ def test_ac_10_1_zero_matches_cli_message_names_the_query_and_nonzero_exit(
 async def test_ac_10_2_single_match_returns_one_candidate_with_key_name_post(
     httpx_mock: HTTPXMock, base_url, session_token
 ):
-    from ktalk_mcp.client import KTalkClient
-    from ktalk_mcp.contacts import search_contacts
+    from ktalk_cli.client import KTalkClient
+    from ktalk_cli.contacts import search_contacts
 
     httpx_mock.add_response(
         json={"contacts": [_candidate("668", "Иванов", "Иван", post="Разработчик")]}
@@ -121,8 +121,8 @@ async def test_ac_10_3_multiple_matches_returns_full_unranked_list_preserving_se
 ):
     """Порядок кандидатов — как в ответе сервера, не пересортирован по
     «похожести» (ADR-010 п.3: автовыбор/ранжирование запрещены явно)."""
-    from ktalk_mcp.client import KTalkClient
-    from ktalk_mcp.contacts import search_contacts
+    from ktalk_cli.client import KTalkClient
+    from ktalk_cli.contacts import search_contacts
 
     server_order = [
         _candidate("668", "Иванов", "Иван"),
@@ -144,8 +144,8 @@ async def test_ac_10_3_multiple_matches_returns_full_unranked_list_preserving_se
 async def test_ac_10_4_search_contacts_apikey_mode_refuses_before_network_call(
     httpx_mock: HTTPXMock, base_url, personal_api_key
 ):
-    from ktalk_mcp.client import KTalkClient, OperationNotAvailableError
-    from ktalk_mcp.contacts import search_contacts
+    from ktalk_cli.client import KTalkClient, OperationNotAvailableError
+    from ktalk_cli.contacts import search_contacts
 
     async with KTalkClient(base_url=base_url, personal_api_key=personal_api_key) as client:
         with pytest.raises(OperationNotAvailableError):
@@ -160,9 +160,9 @@ async def test_ac_10_4_search_contacts_apikey_mode_refuses_before_network_call(
 async def test_ac_10_5_secret_not_in_zero_match_output(
     httpx_mock: HTTPXMock, base_url, session_token
 ):
-    from ktalk_mcp.client import KTalkClient
-    from ktalk_mcp.contacts import search_contacts
-    from ktalk_mcp.formatters import format_search_contacts
+    from ktalk_cli.client import KTalkClient
+    from ktalk_cli.contacts import search_contacts
+    from ktalk_cli.formatters import format_search_contacts
 
     httpx_mock.add_response(json={"contacts": []})
 
@@ -176,9 +176,9 @@ async def test_ac_10_5_secret_not_in_zero_match_output(
 async def test_ac_10_5_secret_not_in_single_match_output(
     httpx_mock: HTTPXMock, base_url, session_token
 ):
-    from ktalk_mcp.client import KTalkClient
-    from ktalk_mcp.contacts import search_contacts
-    from ktalk_mcp.formatters import format_search_contacts
+    from ktalk_cli.client import KTalkClient
+    from ktalk_cli.contacts import search_contacts
+    from ktalk_cli.formatters import format_search_contacts
 
     httpx_mock.add_response(json={"contacts": [_candidate("668", "Иванов", "Иван")]})
 
@@ -192,9 +192,9 @@ async def test_ac_10_5_secret_not_in_single_match_output(
 async def test_ac_10_5_secret_not_in_multi_match_output(
     httpx_mock: HTTPXMock, base_url, session_token
 ):
-    from ktalk_mcp.client import KTalkClient
-    from ktalk_mcp.contacts import search_contacts
-    from ktalk_mcp.formatters import format_search_contacts
+    from ktalk_cli.client import KTalkClient
+    from ktalk_cli.contacts import search_contacts
+    from ktalk_cli.formatters import format_search_contacts
 
     httpx_mock.add_response(
         json={
@@ -217,8 +217,8 @@ async def test_ac_10_5_secret_not_in_apikey_refusal_message(base_url, personal_a
     только под session (`endpoints.py`) — сообщение обязано советовать включить
     сессию, не ключ (`match=` — иначе тест не может провалиться на неверном
     тексте)."""
-    from ktalk_mcp.client import KTalkClient, OperationNotAvailableError
-    from ktalk_mcp.contacts import search_contacts
+    from ktalk_cli.client import KTalkClient, OperationNotAvailableError
+    from ktalk_cli.contacts import search_contacts
 
     async with KTalkClient(base_url=base_url, personal_api_key=personal_api_key) as client:
         with pytest.raises(OperationNotAvailableError, match="режиме сессии") as exc_info:
@@ -233,8 +233,8 @@ async def test_ac_10_5_secret_not_in_apikey_refusal_message(base_url, personal_a
 async def test_search_contacts_sends_expected_get_request_with_fixed_top_and_flags(
     httpx_mock: HTTPXMock, base_url, session_token
 ):
-    from ktalk_mcp.client import KTalkClient
-    from ktalk_mcp.contacts import search_contacts
+    from ktalk_cli.client import KTalkClient
+    from ktalk_cli.contacts import search_contacts
 
     httpx_mock.add_response(json={"contacts": []})
 
@@ -251,8 +251,8 @@ async def test_search_contacts_sends_expected_get_request_with_fixed_top_and_fla
 
 
 def test_operation_profiles_search_contacts_session_present_apikey_none():
-    from ktalk_mcp.auth import OPERATION_PROFILES
-    from ktalk_mcp.config import AuthMode
+    from ktalk_cli.auth import OPERATION_PROFILES
+    from ktalk_cli.config import AuthMode
 
     profile = OPERATION_PROFILES["search_contacts"]
     assert profile[AuthMode.SESSION] is not None
@@ -261,7 +261,7 @@ def test_operation_profiles_search_contacts_session_present_apikey_none():
 
 
 def test_format_search_contacts_25_candidates_not_truncated():
-    from ktalk_mcp.formatters import format_search_contacts
+    from ktalk_cli.formatters import format_search_contacts
 
     candidates = [
         {"key": str(1000 + i), "name": f"Синтетический {i}", "post": "тест"} for i in range(25)
@@ -278,7 +278,7 @@ def test_build_meeting_body_has_no_parameter_for_contact_search():
     числовые `key` — ни `query`, ни объект клиента для поиска в сигнатуре нет."""
     import inspect
 
-    from ktalk_mcp.meeting_body import build_meeting_body, build_required_attendees
+    from ktalk_cli.meeting_body import build_meeting_body, build_required_attendees
 
     body_params = set(inspect.signature(build_meeting_body).parameters)
     attendees_params = set(inspect.signature(build_required_attendees).parameters)
@@ -294,27 +294,16 @@ def test_meeting_body_module_does_not_import_search_contacts():
     ни напрямую, ни через `contacts`/`client`-модуль поиска."""
     import inspect
 
-    import ktalk_mcp.meeting_body as mb
+    import ktalk_cli.meeting_body as mb
 
     source = inspect.getsource(mb)
     assert "search_contacts" not in source
-    assert "import ktalk_mcp.contacts" not in source
-    assert "from ktalk_mcp.contacts" not in source
-
-
-async def test_ktalk_search_contacts_mcp_tool_registered_with_query_required():
-    from ktalk_mcp.server import mcp
-
-    tools = await mcp.list_tools()
-    tools_by_name = {t.name: t for t in tools}
-
-    assert "ktalk_search_contacts" in tools_by_name
-    schema = tools_by_name["ktalk_search_contacts"].parameters
-    assert "query" in set(schema.get("required", []))
+    assert "import ktalk_cli.contacts" not in source
+    assert "from ktalk_cli.contacts" not in source
 
 
 def test_build_parser_registers_search_contacts_subcommand():
-    from ktalk_mcp.cli import build_parser
+    from ktalk_cli.cli import build_parser
 
     parser = build_parser()
     args = parser.parse_args(["search-contacts", "--query", "x"])

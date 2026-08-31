@@ -12,7 +12,7 @@ import stat
 
 
 def _seed(db_path):
-    from ktalk_mcp.registry import Registry
+    from ktalk_cli.registry import Registry
 
     with Registry(db_path) as reg:
         reg.upsert_recording(
@@ -38,7 +38,7 @@ def test_maj01_host_config_db_path_wired_into_cli_main(tmp_path, monkeypatch, ca
     monkeypatch.delenv("CLAUDE_PROJECT_DIR", raising=False)
     monkeypatch.chdir(project)
 
-    from ktalk_mcp.cli import main
+    from ktalk_cli.cli import main
 
     rc = main(["list", "--json"])
     assert rc == 0
@@ -63,7 +63,7 @@ def test_maj01_explicit_db_flag_still_wins_over_host_config(tmp_path, monkeypatc
     monkeypatch.delenv("CLAUDE_PROJECT_DIR", raising=False)
     monkeypatch.chdir(project)
 
-    from ktalk_mcp.cli import main
+    from ktalk_cli.cli import main
 
     rc = main(["--db", str(explicit_db), "list", "--json"])
     assert rc == 0
@@ -84,7 +84,7 @@ def test_maj01_registry_free_command_does_not_trigger_host_config_discovery(
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("KTALK_SESSION_TOKEN", "test-token")
 
-    from ktalk_mcp.cli import main
+    from ktalk_cli.cli import main
 
     main(["auth-status"])
     captured = capsys.readouterr()
@@ -110,7 +110,7 @@ def test_maj02_umask_restored_after_registry_command_returns(tmp_path, monkeypat
     old_umask = os.umask(0o022)
     os.umask(old_umask)  # только считать исходное значение
 
-    from ktalk_mcp.cli import main
+    from ktalk_cli.cli import main
 
     rc = main(["--db", str(db_path), "list", "--json"])
     assert rc == 0
@@ -143,7 +143,7 @@ def test_maj02_file_written_after_registry_closes_uses_ambient_umask_not_0o077(
     old_umask = os.umask(0o022)
     os.umask(old_umask)
 
-    from ktalk_mcp.cli import main
+    from ktalk_cli.cli import main
 
     rc = main(["--db", str(db_path), "export"])
     assert rc == 0
@@ -179,7 +179,7 @@ def test_maj03_export_mirror_follows_host_config_db_path(tmp_path, monkeypatch, 
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "xdg"))
     monkeypatch.chdir(project)
 
-    from ktalk_mcp.cli import main
+    from ktalk_cli.cli import main
 
     rc = main(["export", "--json"])
     assert rc == 0

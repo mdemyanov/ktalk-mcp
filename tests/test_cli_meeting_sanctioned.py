@@ -43,7 +43,7 @@ def _run(argv, monkeypatch=None, base_url="https://test.ktalk.ru"):
         monkeypatch.setenv("KTALK_BASE_URL", base_url)
         monkeypatch.setenv("KTALK_SESSION_TOKEN", "sess-1")
         monkeypatch.delenv("KTALK_PERSONAL_API_KEY", raising=False)
-    from ktalk_mcp.cli import main
+    from ktalk_cli.cli import main
 
     return main(["--db", BAD_DB, *argv])
 
@@ -54,7 +54,7 @@ def _preview_id(command, args, monkeypatch, capsys):
 
 
 def _grant(operation, **kwargs):
-    from ktalk_mcp import write_sanction
+    from ktalk_cli import write_sanction
 
     write_sanction.grant(operation, **{"hours": 8, "operations": 3, **kwargs})
 
@@ -98,7 +98,7 @@ def test_confirm_without_sanction_refuses_and_makes_no_request(
 def test_confirm_with_sanction_and_confirmation_id_creates_exactly_once(
     httpx_mock: HTTPXMock, monkeypatch, capsys
 ):
-    from ktalk_mcp import write_sanction
+    from ktalk_cli import write_sanction
 
     _grant("create_meeting")
     cid = _preview_id("create-meeting-preview", _MEETING_ARGS, monkeypatch, capsys)
@@ -149,7 +149,7 @@ def test_confirm_with_expired_sanction_returns_41(httpx_mock: HTTPXMock, monkeyp
 
 
 def test_confirm_with_exhausted_sanction_returns_42(httpx_mock: HTTPXMock, monkeypatch, capsys):
-    from ktalk_mcp import write_sanction
+    from ktalk_cli import write_sanction
 
     _grant("create_meeting", operations=1)
     write_sanction.consume("create_meeting")
@@ -162,7 +162,7 @@ def test_confirm_with_exhausted_sanction_returns_42(httpx_mock: HTTPXMock, monke
 
 
 def test_revoke_takes_effect_on_next_attempt(httpx_mock: HTTPXMock, monkeypatch, capsys):
-    from ktalk_mcp import write_sanction
+    from ktalk_cli import write_sanction
 
     _grant("create_meeting")
     cid = _preview_id("create-meeting-preview", _MEETING_ARGS, monkeypatch, capsys)
@@ -220,7 +220,7 @@ def test_repeat_with_consumed_confirmation_id_refuses_exactly_one_post(
 def test_budget_is_consumed_on_unknown_outcome(httpx_mock: HTTPXMock, monkeypatch, capsys):
     """Списание до сетевой попытки: «попробовать ещё раз» не бесплатно даже для агента,
     решившего сделать это вопреки промту."""
-    from ktalk_mcp import write_sanction
+    from ktalk_cli import write_sanction
 
     _grant("create_meeting")
     cid = _preview_id("create-meeting-preview", _MEETING_ARGS, monkeypatch, capsys)
@@ -249,7 +249,7 @@ def test_tty_channel_works_without_sanction_and_logs_channel_tty(
     import pty
     import sys
 
-    from ktalk_mcp import write_journal, write_sanction
+    from ktalk_cli import write_journal, write_sanction
 
     master_fd, slave_fd = pty.openpty()
     monkeypatch.setattr(sys, "stdin", os.fdopen(os.dup(slave_fd), "r"))

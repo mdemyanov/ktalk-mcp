@@ -26,7 +26,7 @@ def _session_env(monkeypatch):
 
 
 def test_content_commands_are_registry_free():
-    from ktalk_mcp.cli import _REGISTRY_FREE_COMMANDS
+    from ktalk_cli.cli import _REGISTRY_FREE_COMMANDS
 
     for cmd in (
         "list-recordings",
@@ -45,7 +45,7 @@ def test_content_commands_are_registry_free():
 
 
 def test_build_parser_registers_all_content_subcommands():
-    from ktalk_mcp.cli import build_parser
+    from ktalk_cli.cli import build_parser
 
     parser = build_parser()
     parser.parse_args(["list-recordings"])
@@ -66,7 +66,7 @@ def test_build_parser_registers_all_content_subcommands():
 
 @pytest.mark.httpx_mock(assert_all_responses_were_requested=False)
 def test_list_recordings_json_valid_and_contains_recordings(httpx_mock: HTTPXMock, capsys):
-    from ktalk_mcp.cli import main
+    from ktalk_cli.cli import main
 
     httpx_mock.add_response(
         json={"recordings": [{"key": "REC-1", "name": "Синк", "startTime": "2026-01-01T10:00:00Z"}]}
@@ -84,7 +84,7 @@ def test_list_recordings_json_valid_and_contains_recordings(httpx_mock: HTTPXMoc
 
 @pytest.mark.httpx_mock(assert_all_responses_were_requested=False)
 def test_get_recording_json_valid(httpx_mock: HTTPXMock, capsys):
-    from ktalk_mcp.cli import main
+    from ktalk_cli.cli import main
 
     httpx_mock.add_response(json={"key": "REC-1", "name": "Синк"})
 
@@ -96,7 +96,7 @@ def test_get_recording_json_valid(httpx_mock: HTTPXMock, capsys):
 
 
 def test_get_recording_error_goes_to_stderr_with_nonzero_exit(httpx_mock: HTTPXMock, capsys):
-    from ktalk_mcp.cli import main
+    from ktalk_cli.cli import main
 
     httpx_mock.add_response(status_code=401, json={})
 
@@ -113,7 +113,7 @@ def test_get_recording_error_goes_to_stderr_with_nonzero_exit(httpx_mock: HTTPXM
 
 @pytest.mark.httpx_mock(assert_all_responses_were_requested=False)
 def test_get_transcript_json_default_returns_raw_json(httpx_mock: HTTPXMock, capsys):
-    from ktalk_mcp.cli import main
+    from ktalk_cli.cli import main
 
     httpx_mock.add_response(json={"status": "done", "tracks": []})
 
@@ -126,7 +126,7 @@ def test_get_transcript_json_default_returns_raw_json(httpx_mock: HTTPXMock, cap
 
 @pytest.mark.httpx_mock(assert_all_responses_were_requested=False)
 def test_get_transcript_markdown_default(httpx_mock: HTTPXMock, capsys):
-    from ktalk_mcp.cli import main
+    from ktalk_cli.cli import main
 
     httpx_mock.add_response(json={"status": "done", "tracks": []})
 
@@ -141,7 +141,7 @@ def test_get_transcript_markdown_default(httpx_mock: HTTPXMock, capsys):
 
 @pytest.mark.httpx_mock(assert_all_responses_were_requested=False)
 def test_get_summary_json_valid(httpx_mock: HTTPXMock, capsys):
-    from ktalk_mcp.cli import main
+    from ktalk_cli.cli import main
 
     httpx_mock.add_response(json={"shortSummary": {"chunks": []}, "protocol": {"chunks": []}})
 
@@ -153,7 +153,7 @@ def test_get_summary_json_valid(httpx_mock: HTTPXMock, capsys):
 
 @pytest.mark.httpx_mock(assert_all_responses_were_requested=False)
 def test_get_summary_type_json_valid(httpx_mock: HTTPXMock, capsys):
-    from ktalk_mcp.cli import main
+    from ktalk_cli.cli import main
 
     httpx_mock.add_response(json={"chunks": []})
 
@@ -168,7 +168,7 @@ def test_get_summary_type_json_valid(httpx_mock: HTTPXMock, capsys):
 
 @pytest.mark.httpx_mock(assert_all_responses_were_requested=False)
 def test_get_participants_json_valid(httpx_mock: HTTPXMock, capsys):
-    from ktalk_mcp.cli import main
+    from ktalk_cli.cli import main
 
     httpx_mock.add_response(json={"key": "REC-1", "participantsCount": 0, "participants": []})
     httpx_mock.add_response(json={"artifacts": {"participants": []}})
@@ -185,7 +185,7 @@ def test_get_participants_json_valid(httpx_mock: HTTPXMock, capsys):
 
 @pytest.mark.httpx_mock(assert_all_responses_were_requested=False)
 def test_download_recording_json_valid_and_writes_file(httpx_mock: HTTPXMock, capsys, tmp_path):
-    from ktalk_mcp.cli import main
+    from ktalk_cli.cli import main
 
     target = tmp_path / "rec.mp4"
     httpx_mock.add_response(
@@ -209,7 +209,7 @@ def test_download_recording_json_valid_and_writes_file(httpx_mock: HTTPXMock, ca
 
 @pytest.mark.httpx_mock(assert_all_responses_were_requested=False)
 def test_list_archive_json_valid(httpx_mock: HTTPXMock, capsys, monkeypatch):
-    from ktalk_mcp.cli import main
+    from ktalk_cli.cli import main
 
     monkeypatch.setenv("KTALK_PERSONAL_API_KEY", "test-personal-api-key-0001")
     httpx_mock.add_response(json={"conferences": []})
@@ -226,7 +226,7 @@ def test_list_archive_json_valid(httpx_mock: HTTPXMock, capsys, monkeypatch):
 
 @pytest.mark.httpx_mock(assert_all_responses_were_requested=False)
 def test_get_chat_messages_requires_recording_or_conference_key(capsys):
-    from ktalk_mcp.cli import main
+    from ktalk_cli.cli import main
 
     rc = main(["get-chat-messages", "--json"])
 
@@ -239,7 +239,7 @@ def test_get_chat_messages_requires_recording_or_conference_key(capsys):
 
 @pytest.mark.httpx_mock(assert_all_responses_were_requested=False)
 def test_list_calendar_json_valid(httpx_mock: HTTPXMock, capsys):
-    from ktalk_mcp.cli import main
+    from ktalk_cli.cli import main
 
     httpx_mock.add_response(json={"items": []})
 
@@ -256,7 +256,7 @@ def test_list_calendar_json_valid(httpx_mock: HTTPXMock, capsys):
 
 @pytest.mark.httpx_mock(assert_all_responses_were_requested=False)
 def test_get_room_json_valid(httpx_mock: HTTPXMock, capsys):
-    from ktalk_mcp.cli import main
+    from ktalk_cli.cli import main
 
     httpx_mock.add_response(json={"roomName": "room-1"})
 

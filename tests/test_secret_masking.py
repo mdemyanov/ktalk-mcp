@@ -27,7 +27,7 @@ def base_url():
 
 async def test_secret_not_in_auth_error_message(httpx_mock: HTTPXMock, base_url):
     """Значение ключа не появляется в тексте KTalkAuthError."""
-    from ktalk_mcp.client import KTalkAuthError, KTalkClient
+    from ktalk_cli.client import KTalkAuthError, KTalkClient
 
     httpx_mock.add_response(status_code=401)
 
@@ -42,7 +42,7 @@ async def test_secret_not_in_generic_exception_str_or_repr(httpx_mock: HTTPXMock
     """ADR-003: KTalkError строит текст из статичных строк, никогда из
     str(request.url)/request.headers — секрет не должен всплыть даже в repr исключения
     при непредвиденной сетевой ошибке."""
-    from ktalk_mcp.client import KTalkClient
+    from ktalk_cli.client import KTalkClient
 
     httpx_mock.add_exception(httpx.ConnectError("connection refused"))
 
@@ -64,7 +64,7 @@ def test_secret_not_in_cli_text_output(
     monkeypatch.delenv("KTALK_REGISTRY_DB", raising=False)
     httpx_mock.add_response(status_code=401)
 
-    from ktalk_mcp.cli import main
+    from ktalk_cli.cli import main
 
     db = tmp_path / "r.db"
     main(["--db", str(db), "sync", "--days", "7"])
@@ -84,7 +84,7 @@ def test_secret_not_in_cli_json_output(
     monkeypatch.delenv("KTALK_REGISTRY_DB", raising=False)
     httpx_mock.add_response(status_code=401)
 
-    from ktalk_mcp.cli import main
+    from ktalk_cli.cli import main
 
     db = tmp_path / "r.db"
     main(["--db", str(db), "sync", "--days", "7", "--json"])
@@ -109,7 +109,7 @@ def test_session_secret_not_in_cli_text_output(
     monkeypatch.delenv("KTALK_REGISTRY_DB", raising=False)
     httpx_mock.add_response(status_code=401)
 
-    from ktalk_mcp.cli import main
+    from ktalk_cli.cli import main
 
     db = tmp_path / "r.db"
     main(["--db", str(db), "sync", "--days", "7"])
@@ -129,7 +129,7 @@ def test_session_secret_not_in_cli_json_output(
     monkeypatch.delenv("KTALK_REGISTRY_DB", raising=False)
     httpx_mock.add_response(status_code=401)
 
-    from ktalk_mcp.cli import main
+    from ktalk_cli.cli import main
 
     db = tmp_path / "r.db"
     main(["--db", str(db), "sync", "--days", "7", "--json"])
@@ -149,7 +149,7 @@ def test_secret_not_in_auth_status_cli_output(
     monkeypatch.delenv("KTALK_REGISTRY_DB", raising=False)
     httpx_mock.add_response(status_code=401)
 
-    from ktalk_mcp.cli import main
+    from ktalk_cli.cli import main
 
     db = tmp_path / "r.db"
     main(["--db", str(db), "auth-status", "--json"])
@@ -166,7 +166,7 @@ def test_secret_not_in_settings_repr_or_str(monkeypatch):
     monkeypatch.setenv("KTALK_PERSONAL_API_KEY", SECRET)
     monkeypatch.delenv("KTALK_SESSION_TOKEN", raising=False)
 
-    from ktalk_mcp.config import Settings
+    from ktalk_cli.config import Settings
 
     settings = Settings()
     assert SECRET not in repr(settings)
@@ -186,8 +186,8 @@ async def test_nfr10_secret_not_in_get_room_error_message(httpx_mock: HTTPXMock,
     401 никогда не запрашивается. NFR-10 проверяется в физически достижимом
     сценарии — там, где у операции есть профиль и сетевой вызов реально происходит.
     """
-    from ktalk_mcp.client import KTalkAuthError, KTalkClient
-    from ktalk_mcp.rooms import get_room
+    from ktalk_cli.client import KTalkAuthError, KTalkClient
+    from ktalk_cli.rooms import get_room
 
     httpx_mock.add_response(status_code=401)  # недокументированный путь: get_room
     httpx_mock.add_response(status_code=401)  # контрольный вызов ADR-004 (401/401 -> reraise)
@@ -207,8 +207,8 @@ async def test_nfr10_secret_not_in_calendar_error_message(httpx_mock: HTTPXMock,
     достижим."""
     from datetime import date
 
-    from ktalk_mcp.calendar_reader import get_calendar_window
-    from ktalk_mcp.client import KTalkAuthError, KTalkClient
+    from ktalk_cli.calendar_reader import get_calendar_window
+    from ktalk_cli.client import KTalkAuthError, KTalkClient
 
     httpx_mock.add_response(status_code=401)  # недокументированный путь: get_calendar
     httpx_mock.add_response(status_code=401)  # контрольный вызов ADR-004 (401/401 -> reraise)
@@ -230,7 +230,7 @@ def test_nfr10_secret_not_in_create_meeting_preview_cli_output(
     monkeypatch.setenv("KTALK_PERSONAL_API_KEY", SECRET)
     monkeypatch.delenv("KTALK_SESSION_TOKEN", raising=False)
 
-    from ktalk_mcp.cli import main
+    from ktalk_cli.cli import main
 
     db = tmp_path / "r.db"
     main(
@@ -275,7 +275,7 @@ def test_secret_redacted_from_unexpected_exception_via_cli_main(
     monkeypatch.delenv("KTALK_SESSION_TOKEN", raising=False)
     monkeypatch.delenv("KTALK_REGISTRY_DB", raising=False)
 
-    from ktalk_mcp import cli
+    from ktalk_cli import cli
 
     def _boom(reg, args):
         raise RuntimeError(f"unexpected failure, credential was {SECRET}")
@@ -306,7 +306,7 @@ def test_session_token_redacted_from_unexpected_exception_via_cli_main(
     monkeypatch.delenv("KTALK_PERSONAL_API_KEY", raising=False)
     monkeypatch.delenv("KTALK_REGISTRY_DB", raising=False)
 
-    from ktalk_mcp import cli
+    from ktalk_cli import cli
 
     def _boom(reg, args):
         raise RuntimeError(f"unexpected failure, credential was {SECRET}")

@@ -1,9 +1,12 @@
-"""AT-design: FR-21 — команды реестра/MCP read-инструменты работают в проекте без
-vault-подобной раскладки (не ошибка использования, штатная ветка).
+"""AT-design: FR-21 — команды реестра работают в проекте без vault-подобной
+раскладки (не ошибка использования, штатная ветка).
 
 Покрывает FR-21 AC-1 (registry-команды не требуют `95_TRANSCRIPTS`/`20_MEETINGS`/
-любого каталога vault'а) и FR-21 AC-2 (MCP read-инструмент чтения записи не
-адресует файлы хозяина, только API Толка + централизованное хранилище).
+любого каталога vault'а). FR-21 AC-2 (MCP read-инструмент чтения записи не
+адресует файлы хозяина) проверялся отдельным тестом на регистрацию MCP-инструмента;
+ADR-022 снимает MCP-слой целиком — проверка удалена вместе с `server.py`, факт
+(read-путь не импортирует `host_config`/discovery) остаётся верным на уровне кода,
+просто больше не наблюдается отдельным тестом.
 
 Часть покрытия здесь — регрессионный снимок: список команд ниже уже не создаёт
 и не ищет vault-каталоги сегодня (единственная зависимость от раскладки —
@@ -16,7 +19,7 @@ from __future__ import annotations
 
 
 def _seed(db_path):
-    from ktalk_mcp.registry import Registry
+    from ktalk_cli.registry import Registry
 
     with Registry(db_path) as reg:
         reg.upsert_recording(
@@ -28,7 +31,7 @@ def _seed(db_path):
 def test_ac_fr21_1_list_show_mark_dashboard_export_work_without_ktalk_toml_or_vault_dirs(
     tmp_path, monkeypatch, capsys
 ):
-    from ktalk_mcp.cli import main
+    from ktalk_cli.cli import main
 
     monkeypatch.delenv("CLAUDE_PROJECT_DIR", raising=False)
     project = tmp_path / "clean-project"  # ни .ktalk.toml, ни 95_TRANSCRIPTS, ни .git
@@ -61,7 +64,7 @@ def test_ac_fr21_1_export_mirror_written_relative_to_db_path_not_requiring_vault
 ):
     """export уже сегодня пишет `registry.md` рядом с БД (cli.py) — регрессия:
     проверка, что это не требует существования vault-каталогов рядом."""
-    from ktalk_mcp.cli import main
+    from ktalk_cli.cli import main
 
     monkeypatch.delenv("CLAUDE_PROJECT_DIR", raising=False)
     db = tmp_path / "no-vault-here" / "registry.db"
@@ -71,25 +74,3 @@ def test_ac_fr21_1_export_mirror_written_relative_to_db_path_not_requiring_vault
     rc = main(["--db", str(db), "export"])
     assert rc == 0
     assert (db.parent / "registry.md").exists()
-
-
-async def test_ac_fr21_2_mcp_read_tool_json_output_shape_unaffected_by_absence_of_host_layout(
-    tmp_path, monkeypatch
-):
-    """FR-21 AC-2: MCP-инструмент чтения (например, ktalk_get_transcript) адресует
-    только API Толка / централизованное хранилище — не файлы хозяина; отсутствие
-    `.ktalk.toml`/vault-каталогов не меняет его поведение. Регрессия существующих
-    read-инструментов (NFR-6) распространяется на проект без раскладки: инструменты
-    не импортируют `host_config`/discovery на пути чтения контента."""
-    monkeypatch.delenv("CLAUDE_PROJECT_DIR", raising=False)
-    project = tmp_path / "clean-project"
-    project.mkdir()
-    monkeypatch.chdir(project)
-
-    from ktalk_mcp.server import mcp
-
-    tools = await mcp.list_tools()
-    names = {t.name for t in tools}
-    assert "ktalk_get_transcript" in names, (
-        "TODO: FR-21 AC-2 — read-инструмент регистрируется независимо от layout хозяина"
-    )

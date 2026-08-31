@@ -1,4 +1,4 @@
-"""AT-design: FR-40 — формат `--timezone` компоновщика (`ktalk_mcp.meeting_body`),
+"""AT-design: FR-40 — формат `--timezone` компоновщика (`ktalk_cli.meeting_body`),
 ADR-020 (`GMT[+-](0..14)`, класс ошибки `TimezoneFormatError`, отказ до сети/санкции).
 
 Замер владельца (rooms-calendar-scheduling.md:357-368): единственная рабочая форма — `GMT+3`;
@@ -79,7 +79,7 @@ def _run(argv, monkeypatch, base_url="https://test.ktalk.ru"):
     monkeypatch.setenv("KTALK_BASE_URL", base_url)
     monkeypatch.setenv("KTALK_SESSION_TOKEN", "sess-1")
     monkeypatch.delenv("KTALK_PERSONAL_API_KEY", raising=False)
-    from ktalk_mcp.cli import main
+    from ktalk_cli.cli import main
 
     return main(["--db", BAD_DB, *argv])
 
@@ -90,7 +90,7 @@ def _run(argv, monkeypatch, base_url="https://test.ktalk.ru"):
 def test_ac1_gmt_plus_3_accepted_body_unchanged_snapshot():
     """AC FR-40/1: значение принимается и уходит в тело без изменений (снимок тела,
     не просто «не упало»)."""
-    from ktalk_mcp.meeting_body import build_meeting_body
+    from ktalk_cli.meeting_body import build_meeting_body
 
     body = build_meeting_body(**FULL_KWARGS)
 
@@ -111,7 +111,7 @@ def test_ac1_gmt_plus_3_accepted_body_unchanged_snapshot():
 def test_ac2_rejected_form_raises_timezoneformaterror_unit(bad_timezone):
     """AC FR-40/2, уровень чистой функции: каждая из семи отклонённых форм замера
     вызывает `TimezoneFormatError`, не пропускается в тело."""
-    from ktalk_mcp.meeting_body import TimezoneFormatError, build_meeting_body
+    from ktalk_cli.meeting_body import TimezoneFormatError, build_meeting_body
 
     kwargs = dict(FULL_KWARGS)
     kwargs["timezone"] = bad_timezone
@@ -171,9 +171,9 @@ def test_ac3_format_rejection_issues_no_confirmation_id():
     """AC FR-40/3: `PreviewService.preview` падает раньше `store.issue` — хранилище
     подтверждений остаётся пустым, id не выдан (проверка фактического состояния
     хранилища, не косвенный вывод по отсутствию исключения)."""
-    from ktalk_mcp.confirmation import ConfirmationStore
-    from ktalk_mcp.meeting_body import TimezoneFormatError
-    from ktalk_mcp.meeting_scheduling import PreviewService
+    from ktalk_cli.confirmation import ConfirmationStore
+    from ktalk_cli.meeting_body import TimezoneFormatError
+    from ktalk_cli.meeting_scheduling import PreviewService
 
     store = ConfirmationStore()
     kwargs = dict(FULL_KWARGS)
@@ -194,7 +194,7 @@ def test_ac3_format_rejection_does_not_consume_write_sanction_budget(
     происходит внутри `preview(store)`, раньше `_authorize`/`write_sanction.consume` —
     бюджет не тронут независимо от того, была ли санкция выдана вовсе. Проверяем
     фактический остаток бюджета до/после, не только код возврата."""
-    from ktalk_mcp import write_sanction
+    from ktalk_cli import write_sanction
 
     write_sanction.grant("create_meeting", hours=8, operations=3)
     remaining_before = write_sanction.read_state("create_meeting").remaining
@@ -228,7 +228,7 @@ def test_ac4_error_message_names_format_and_example_not_raw_server_text():
     """AC FR-40/4: текстовый снимок сообщения — требуемый формат (`GMT±N`) и
     единственный проверенный пример (`GMT+3`) присутствуют, сырой текст сервера
     `CalendarTimeZoneParse` отсутствует."""
-    from ktalk_mcp.meeting_body import TimezoneFormatError, build_meeting_body
+    from ktalk_cli.meeting_body import TimezoneFormatError, build_meeting_body
 
     kwargs = dict(FULL_KWARGS)
     kwargs["timezone"] = "Europe/Moscow"
@@ -248,7 +248,7 @@ def test_ac4_error_message_names_format_and_example_not_raw_server_text():
 def test_ac5_cli_help_names_timezone_format():
     """AC FR-40/5: `--help` (через `parser.format_help()`, не чтение исходника
     `cli_meeting_args.py`) называет формат `GMT±N`/пример `GMT+3`."""
-    from ktalk_mcp.cli_meeting_args import add_meeting_args
+    from ktalk_cli.cli_meeting_args import add_meeting_args
 
     parser = argparse.ArgumentParser()
     add_meeting_args(parser)
@@ -262,7 +262,7 @@ def test_ac5_cli_help_names_timezone_format():
 def test_ac5_build_meeting_body_docstring_names_timezone_format():
     """AC FR-40/5: докстринг `build_meeting_body` (через `inspect.getdoc`, не чтение
     исходника) называет формат `GMT±N`/пример `GMT+3`."""
-    from ktalk_mcp.meeting_body import build_meeting_body
+    from ktalk_cli.meeting_body import build_meeting_body
 
     doc = inspect.getdoc(build_meeting_body) or ""
 
@@ -278,7 +278,7 @@ def test_boundary_regex_accepts_edge_of_declared_range(value):
     """Экстраполированная (не измеренная, ADR-020 §3) граница диапазона `0..14` на обеих
     сторонах знака принимается локальной проверкой — эта проверка ловит расхождение с
     регуляркой, не поведение сервера (сервер на этих значениях не замерялся)."""
-    from ktalk_mcp.meeting_body import build_meeting_body
+    from ktalk_cli.meeting_body import build_meeting_body
 
     kwargs = dict(FULL_KWARGS)
     kwargs["timezone"] = value
@@ -297,7 +297,7 @@ def test_boundary_regex_rejects_out_of_range_or_malformed(value):
     отклонённый вариант регулярки `0..99` пропустил бы), без знака (`GMT3`), в нижнем
     регистре (`gmt+3` — регулярка регистрозависима, ADR-020-spec §Edge cases) и пустая
     строка (не `None` — минует `MissingFieldError`, обязана дойти до проверки формы)."""
-    from ktalk_mcp.meeting_body import TimezoneFormatError, build_meeting_body
+    from ktalk_cli.meeting_body import TimezoneFormatError, build_meeting_body
 
     kwargs = dict(FULL_KWARGS)
     kwargs["timezone"] = value
@@ -310,7 +310,7 @@ def test_boundary_timezone_none_raises_missing_field_not_timezone_format():
     """ADR-020 §4/ADR-020-spec «Edge cases»: обязательность проверяется раньше формы —
     `timezone=None` обязана дать `MissingFieldError`, не `TimezoneFormatError`. Порядок
     проверок — решённый вопрос ADR (не открытый), тест фиксирует его как контракт."""
-    from ktalk_mcp.meeting_body import MissingFieldError, build_meeting_body
+    from ktalk_cli.meeting_body import MissingFieldError, build_meeting_body
 
     kwargs = dict(FULL_KWARGS)
     kwargs["timezone"] = None

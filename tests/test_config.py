@@ -7,7 +7,7 @@ def test_settings_loads_from_env(monkeypatch):
     monkeypatch.setenv("KTALK_SESSION_TOKEN", "test-token-123")
     monkeypatch.setenv("KTALK_BASE_URL", "https://custom.ktalk.ru")
 
-    from ktalk_mcp.config import Settings
+    from ktalk_cli.config import Settings
 
     settings = Settings()
     assert settings.ktalk_session_token == "test-token-123"
@@ -18,7 +18,7 @@ def test_settings_default_base_url(monkeypatch):
     monkeypatch.setenv("KTALK_SESSION_TOKEN", "test-token-123")
     monkeypatch.delenv("KTALK_BASE_URL", raising=False)
 
-    from ktalk_mcp.config import Settings
+    from ktalk_cli.config import Settings
 
     settings = Settings()
     assert settings.ktalk_base_url == "https://your-domain.ktalk.ru"
@@ -33,7 +33,7 @@ def test_settings_requires_session_token(monkeypatch):
     monkeypatch.delenv("KTALK_PERSONAL_API_KEY", raising=False)
     monkeypatch.delenv("KTALK_BASE_URL", raising=False)
 
-    from ktalk_mcp.config import KTalkConfigError, Settings
+    from ktalk_cli.config import KTalkConfigError, Settings
 
     settings = Settings()  # не поднимает исключение
     with pytest.raises(KTalkConfigError):
@@ -51,22 +51,22 @@ def test_resolve_db_path_default(monkeypatch, tmp_path):
     monkeypatch.delenv("KTALK_REGISTRY_DB", raising=False)
     monkeypatch.delenv("XDG_DATA_HOME", raising=False)
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
-    from ktalk_mcp.config import resolve_db_path
-    from ktalk_mcp.store import resolve_store_root
+    from ktalk_cli.config import resolve_db_path
+    from ktalk_cli.store import resolve_store_root
 
     assert resolve_db_path() == resolve_store_root() / "registry.db"
 
 
 def test_resolve_db_path_env(monkeypatch):
     monkeypatch.setenv("KTALK_REGISTRY_DB", "/tmp/from-env.db")
-    from ktalk_mcp.config import resolve_db_path
+    from ktalk_cli.config import resolve_db_path
 
     assert resolve_db_path() == Path("/tmp/from-env.db")
 
 
 def test_resolve_db_path_flag_wins(monkeypatch):
     monkeypatch.setenv("KTALK_REGISTRY_DB", "/tmp/from-env.db")
-    from ktalk_mcp.config import resolve_db_path
+    from ktalk_cli.config import resolve_db_path
 
     assert resolve_db_path("/tmp/from-flag.db") == Path("/tmp/from-flag.db")
 
@@ -85,14 +85,14 @@ def _host_config_with_db_path(db_path: str):
     `resolve_db_path` умеет прочитать атрибут `registry.db_path` (или
     эквивалент) из объекта, возвращаемого `host_config.load_host_config`.
     """
-    from ktalk_mcp.host_config import HostConfig
+    from ktalk_cli.host_config import HostConfig
 
     return HostConfig(registry={"db_path": db_path})
 
 
 def test_ac_fr23_1_all_four_sources_given_flag_wins(monkeypatch):
     monkeypatch.setenv("KTALK_REGISTRY_DB", "/tmp/from-env.db")
-    from ktalk_mcp.config import resolve_db_path
+    from ktalk_cli.config import resolve_db_path
 
     host_config = _host_config_with_db_path("/tmp/from-host-config.db")
     assert resolve_db_path("/tmp/from-flag.db", host_config=host_config) == Path(
@@ -102,7 +102,7 @@ def test_ac_fr23_1_all_four_sources_given_flag_wins(monkeypatch):
 
 def test_ac_fr23_2_flag_absent_env_and_host_config_given_env_wins(monkeypatch):
     monkeypatch.setenv("KTALK_REGISTRY_DB", "/tmp/from-env.db")
-    from ktalk_mcp.config import resolve_db_path
+    from ktalk_cli.config import resolve_db_path
 
     host_config = _host_config_with_db_path("/tmp/from-host-config.db")
     assert resolve_db_path(None, host_config=host_config) == Path("/tmp/from-env.db")
@@ -112,7 +112,7 @@ def test_ac_fr23_3_only_host_config_given_host_config_wins_over_machine_default(
     monkeypatch,
 ):
     monkeypatch.delenv("KTALK_REGISTRY_DB", raising=False)
-    from ktalk_mcp.config import resolve_db_path
+    from ktalk_cli.config import resolve_db_path
 
     host_config = _host_config_with_db_path("/tmp/from-host-config.db")
     resolved = resolve_db_path(None, host_config=host_config)
@@ -129,7 +129,7 @@ def test_resolve_db_path_none_of_the_four_sources_falls_through_to_machine_defau
     здесь только фиксируется, что resolve_db_path больше не возвращает
     относительный дефолт cwd, когда ни один из четырёх источников не задан."""
     monkeypatch.delenv("KTALK_REGISTRY_DB", raising=False)
-    from ktalk_mcp.config import resolve_db_path
+    from ktalk_cli.config import resolve_db_path
 
     resolved = resolve_db_path(None, host_config=None)
     assert not resolved.is_relative_to(Path.cwd()), (

@@ -4,9 +4,9 @@
 FR-3 (AC-2 — FR-3 AC-1 регрессия уже покрыта существующими test_client.py, не дублируется),
 FR-6 (AC-1, AC-2, AC-3), NFR-2 (AC-1).
 
-Красные по замыслу: `AuthMode`/`KTalkConfigError` в ktalk_mcp.config, `personal_api_key=`
+Красные по замыслу: `AuthMode`/`KTalkConfigError` в ktalk_cli.config, `personal_api_key=`
 у KTalkClient, `KTalkClient.from_settings`, `OPERATION_PROFILES`-диспетчер и
-`OperationNotAvailableError` в ktalk_mcp.client — ничего из этого пока не реализовано.
+`OperationNotAvailableError` в ktalk_cli.client — ничего из этого пока не реализовано.
 """
 
 from __future__ import annotations
@@ -39,7 +39,7 @@ def test_ac_fr1_1_personal_api_key_available_when_set(monkeypatch):
     monkeypatch.setenv("KTALK_SESSION_TOKEN", "")
     monkeypatch.delenv("KTALK_SESSION_TOKEN", raising=False)
 
-    from ktalk_mcp.config import AuthMode, Settings
+    from ktalk_cli.config import AuthMode, Settings
 
     settings = Settings()
     assert settings.ktalk_personal_api_key == "pk-set-0001"
@@ -52,7 +52,7 @@ def test_ac_fr1_2_personal_api_key_absent_no_error_at_load(monkeypatch):
     monkeypatch.delenv("KTALK_PERSONAL_API_KEY", raising=False)
     monkeypatch.setenv("KTALK_SESSION_TOKEN", "sess-token-still-needed")
 
-    from ktalk_mcp.config import Settings
+    from ktalk_cli.config import Settings
 
     settings = Settings()  # не должно поднимать исключение
     assert settings.ktalk_personal_api_key is None
@@ -67,7 +67,7 @@ async def test_ac_fr2_1_apikey_request_has_header_no_query_param(
     """AC FR-2/1: запрос несёт X-Auth-Token и НЕ несёт query-параметр sessionToken."""
     httpx_mock.add_response(json={"status": "complete", "tracks": []})
 
-    from ktalk_mcp.client import KTalkClient
+    from ktalk_cli.client import KTalkClient
 
     async with KTalkClient(base_url=base_url, personal_api_key=personal_api_key) as client:
         await client.get_transcript("REC-1")
@@ -84,7 +84,7 @@ async def test_ac_fr2_2_both_set_key_wins_session_never_sent(
     не появляется ни в query, ни где-либо в запросе (инвариант «взаимоисключение»)."""
     httpx_mock.add_response(json={"status": "complete", "tracks": []})
 
-    from ktalk_mcp.client import KTalkClient
+    from ktalk_cli.client import KTalkClient
 
     async with KTalkClient(
         base_url=base_url, session_token="legacy-session-value", personal_api_key=personal_api_key
@@ -107,8 +107,8 @@ async def test_from_settings_builds_apikey_transport(
     monkeypatch.setenv("KTALK_PERSONAL_API_KEY", personal_api_key)
     monkeypatch.delenv("KTALK_SESSION_TOKEN", raising=False)
 
-    from ktalk_mcp.client import KTalkClient
-    from ktalk_mcp.config import Settings
+    from ktalk_cli.client import KTalkClient
+    from ktalk_cli.config import Settings
 
     settings = Settings()
     httpx_mock.add_response(json={"status": "complete", "tracks": []})
@@ -130,7 +130,7 @@ def test_ac_fr3_2_neither_set_raises_explicit_config_error_not_keyerror(monkeypa
     monkeypatch.delenv("KTALK_PERSONAL_API_KEY", raising=False)
     monkeypatch.delenv("KTALK_SESSION_TOKEN", raising=False)
 
-    from ktalk_mcp.config import KTalkConfigError, Settings
+    from ktalk_cli.config import KTalkConfigError, Settings
 
     settings = Settings()
     with pytest.raises(KTalkConfigError):
@@ -146,7 +146,7 @@ async def test_ac_fr6_1_session_mode_uses_internal_list_path(
     """AC FR-6/1: session-режим -> список записей идёт по /api/recordings, не по Domain."""
     httpx_mock.add_response(json={"recordings": []})
 
-    from ktalk_mcp.client import KTalkClient
+    from ktalk_cli.client import KTalkClient
 
     async with KTalkClient(base_url=base_url, session_token=session_token) as client:
         await client.list_recordings()
@@ -162,7 +162,7 @@ async def test_ac_fr6_2_apikey_mode_uses_domain_v2_path(
     """AC FR-6/2: api-key-режим -> список записей идёт по /api/Domain/recordings/v2."""
     httpx_mock.add_response(json={"entities": [], "nextPageToken": None, "prevPageToken": None})
 
-    from ktalk_mcp.client import KTalkClient
+    from ktalk_cli.client import KTalkClient
 
     async with KTalkClient(base_url=base_url, personal_api_key=personal_api_key) as client:
         await client.list_recordings()
@@ -177,7 +177,7 @@ async def test_ac_fr6_3_operation_without_profile_refuses_before_network_call(
     """AC FR-6/3: операция из группы «аналога нет» (тут — архив) без активного ключа ->
     явное сообщение «доступна только в режиме персонального ключа», а не голый 401/403,
     и это решается ДО сети — httpx-мок не должен получить ни одного запроса."""
-    from ktalk_mcp.client import KTalkClient, OperationNotAvailableError
+    from ktalk_cli.client import KTalkClient, OperationNotAvailableError
 
     async with KTalkClient(base_url=base_url, session_token=session_token) as client:
         with pytest.raises(OperationNotAvailableError):
@@ -192,7 +192,7 @@ async def test_ac_fr6_3_operation_without_profile_refuses_before_network_call(
 def test_ac_nfr2_priority_order_across_four_env_combinations(monkeypatch):
     """AC NFR-2: приоритет ключ -> сессия -> явная ошибка покрыт на всех 4 комбинациях
     присутствия/отсутствия KTALK_PERSONAL_API_KEY и KTALK_SESSION_TOKEN."""
-    from ktalk_mcp.config import AuthMode, KTalkConfigError, Settings
+    from ktalk_cli.config import AuthMode, KTalkConfigError, Settings
 
     # 1. только ключ
     monkeypatch.setenv("KTALK_PERSONAL_API_KEY", "pk-1")
@@ -220,7 +220,7 @@ def test_ac_nfr2_priority_order_across_four_env_combinations(monkeypatch):
 
 
 def test_endpoint_profile_mutating_defaults_to_false():
-    from ktalk_mcp.client import EndpointProfile
+    from ktalk_cli.client import EndpointProfile
 
     profile = EndpointProfile("/api/recordings", None)
     assert profile.mutating is False
@@ -231,8 +231,8 @@ def test_only_create_and_cancel_meeting_session_profiles_are_mutating():
     `create_meeting[AuthMode.SESSION]` и `cancel_meeting[AuthMode.SESSION]`
     (вторая мутирующая операция, тот же барьер, не слабее первой), ни одна
     другая запись таблицы не меняется по умолчанию."""
-    from ktalk_mcp.client import OPERATION_PROFILES
-    from ktalk_mcp.config import AuthMode
+    from ktalk_cli.client import OPERATION_PROFILES
+    from ktalk_cli.config import AuthMode
 
     mutating_operations = {"create_meeting", "cancel_meeting"}
     for operation, modes in OPERATION_PROFILES.items():

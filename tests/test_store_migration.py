@@ -24,7 +24,7 @@ from pathlib import Path
 
 
 def _seed_registry(db_path: Path):
-    from ktalk_mcp.registry import Registry
+    from ktalk_cli.registry import Registry
 
     with Registry(db_path) as reg:
         reg.upsert_recording(
@@ -45,7 +45,7 @@ def _seed_registry(db_path: Path):
 def test_ac_nfr12_1_opening_registry_alone_does_not_move_or_copy_source_file(
     tmp_path,
 ):
-    from ktalk_mcp.registry import Registry
+    from ktalk_cli.registry import Registry
 
     source = tmp_path / "95_TRANSCRIPTS" / ".registry.db"
     source.parent.mkdir(parents=True)
@@ -63,8 +63,8 @@ def test_ac_nfr12_1_opening_registry_alone_does_not_move_or_copy_source_file(
 def test_ac_nfr12_2_migration_preserves_all_records_without_loss_or_value_change(
     tmp_path,
 ):
-    from ktalk_mcp.registry import Registry
-    from ktalk_mcp.store_migration import migrate_to_central_store
+    from ktalk_cli.registry import Registry
+    from ktalk_cli.store_migration import migrate_to_central_store
 
     source = tmp_path / "source" / ".registry.db"
     source.parent.mkdir(parents=True)
@@ -81,7 +81,7 @@ def test_ac_nfr12_2_migration_preserves_all_records_without_loss_or_value_change
 
 
 def test_migration_success_renames_source_to_backup_suffix_not_deleted(tmp_path):
-    from ktalk_mcp.store_migration import migrate_to_central_store
+    from ktalk_cli.store_migration import migrate_to_central_store
 
     source = tmp_path / "source" / ".registry.db"
     source.parent.mkdir(parents=True)
@@ -101,7 +101,7 @@ def test_migration_dump_mismatch_aborts_source_untouched_target_removed(
     """Boundary: если построчная сверка дампа источник<->копия не совпала —
     команда завершается ошибкой, источник остаётся без изменений, целевой файл не
     остаётся частичной копией."""
-    import ktalk_mcp.store_migration as store_migration
+    import ktalk_cli.store_migration as store_migration
 
     source = tmp_path / "source" / ".registry.db"
     source.parent.mkdir(parents=True)
@@ -128,8 +128,8 @@ def test_migration_repeated_call_does_not_silently_overwrite_newer_target_data(
     """Boundary (ADR-013-spec edge case): повторный вызов команды при уже
     существующем файле по целевому пути — не должен тихо перезаписать более новые
     данные централизованного хранилища."""
-    from ktalk_mcp.registry import Registry
-    from ktalk_mcp.store_migration import (
+    from ktalk_cli.registry import Registry
+    from ktalk_cli.store_migration import (
         MigrationTargetExistsError,
         migrate_to_central_store,
     )
@@ -176,7 +176,7 @@ def test_block01_target_gets_owner_only_permissions_regardless_of_source_mode(
     обязана получить 0600/0700 независимо от режима источника."""
     import stat
 
-    from ktalk_mcp.store_migration import migrate_to_central_store
+    from ktalk_cli.store_migration import migrate_to_central_store
 
     monkeypatch.setattr("os.umask", lambda mask: 0o022)  # ambient, не 0o077
 
@@ -209,8 +209,8 @@ def test_min01_target_creation_is_atomic_not_check_then_act(tmp_path):
     (уже покрыт), плюс явная проверка: `target` не остаётся пустым/частичным
     файлом-«меткой» при отказе — либо не создан, либо содержит только пришедшие
     ранее валидные данные."""
-    from ktalk_mcp.registry import Registry
-    from ktalk_mcp.store_migration import (
+    from ktalk_cli.registry import Registry
+    from ktalk_cli.store_migration import (
         MigrationTargetExistsError,
         migrate_to_central_store,
     )

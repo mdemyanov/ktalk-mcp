@@ -6,7 +6,7 @@
 (боевая проверка реального случая >10 участников остаётся ручной — зонд подтвердил
 только 8 из 8, помечено отдельно в at-design.md).
 
-Красные по замыслу: модуль `ktalk_mcp.enrichment` (`enrich_batch`, `map_participants`)
+Красные по замыслу: модуль `ktalk_cli.enrichment` (`enrich_batch`, `map_participants`)
 и метод `KTalkClient.get_full_participants` не существуют.
 
 Примечание об импортах: имена ключей в возвращаемых словарях участников
@@ -42,8 +42,8 @@ async def test_ac_fr8_1_enrich_batch_enriches_when_participants_shorter_than_cou
 ):
     """AC FR-8/1: participants[] короче participantsCount -> клиент дообогащает через
     запрос по конкретной записи, а не доверяет списковому ответу."""
-    from ktalk_mcp.client import KTalkClient
-    from ktalk_mcp.enrichment import enrich_batch
+    from ktalk_cli.client import KTalkClient
+    from ktalk_cli.enrichment import enrich_batch
 
     list_response = _fixture_json("recording-list-item-session.json")
     record = list_response["recordings"][0]
@@ -64,8 +64,8 @@ async def test_ac_fr8_1b_no_enrichment_when_participants_count_matches_exactly(
     """Boundary FR-8/1: participantsCount == len(participants) -> НЕ должно вызывать
     дообогащение (строгое `<`, не `<=`) — не регистрируем httpx-ответ, любой сетевой
     вызов провалит тест как неожиданный запрос."""
-    from ktalk_mcp.client import KTalkClient
-    from ktalk_mcp.enrichment import enrich_batch
+    from ktalk_cli.client import KTalkClient
+    from ktalk_cli.enrichment import enrich_batch
 
     record = {
         "id": "REC-FULL",
@@ -86,7 +86,7 @@ def test_ac_fr8_2_anonymous_participant_not_dropped():
     """AC FR-8/2: анонимный участник (isAnonymous: true, без userInfo) присутствует в
     результате с различимым представлением — сегодняшний participants_from_api его
     молча выбрасывает (registry.py заморожен, поэтому новый маппер — map_participants)."""
-    from ktalk_mcp.enrichment import map_participants
+    from ktalk_cli.enrichment import map_participants
 
     raw = [{"anonymousName": "Гость 1", "anonymousId": "anon-1", "isAnonymous": True}]
     result = map_participants(raw)
@@ -97,7 +97,7 @@ def test_ac_fr8_2_anonymous_participant_not_dropped():
 def test_map_participants_named_user_matches_participants_from_api_schema():
     """map_participants сохраняет ту же схему id/name, что и существующий (замороженный)
     participants_from_api — без изменения формата participants в SQLite."""
-    from ktalk_mcp.enrichment import map_participants
+    from ktalk_cli.enrichment import map_participants
 
     raw = [{"userInfo": {"key": "u1", "surname": "Иванов", "firstname": "Пётр", "login": "ivanov"}}]
     result = map_participants(raw)
@@ -113,7 +113,7 @@ async def test_ac_fr8_3_dual_source_merge_dedups_and_flags_incomplete(
     уникальному участнику, не строгое подмножество друг друга. Если объединение всё равно
     короче participantsCount -> явный флаг incomplete=True, без тихого укорачивания.
     Боевая проверка реального случая >10 участников — отдельно, ручная (см. at-design.md)."""
-    from ktalk_mcp.client import KTalkClient
+    from ktalk_cli.client import KTalkClient
 
     detail = _fixture_json("recording-detail-session-oversized-partial.json")
     conference = _fixture_json("conference-history-session-oversized.json")
@@ -139,8 +139,8 @@ async def test_enrich_batch_partial_failure_does_not_abort_others(
 ):
     """Edge case client-modules-spec §4: одна из N записей отдаёт 500 — остальные N-1
     должны успешно дозавершиться, sync/enrich_batch не падает целиком."""
-    from ktalk_mcp.client import KTalkClient
-    from ktalk_mcp.enrichment import enrich_batch
+    from ktalk_cli.client import KTalkClient
+    from ktalk_cli.enrichment import enrich_batch
 
     record_fail = {"id": "R-FAIL", "participantsCount": 3, "participants": [{}]}
     record_ok = {"id": "R-OK", "participantsCount": 3, "participants": [{}]}

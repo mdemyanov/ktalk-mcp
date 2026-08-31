@@ -10,8 +10,8 @@ at-design «Граница периметра»).
 `cancel-meeting-confirm`/`search-contacts` CLI-уровня уже существуют и работают —
 red здесь означает «CLI-контракт этой волны ещё не подтверждён тестом», не
 «функциональность отсутствует». Каждый stub падает на `assert False`, не на
-импорте/синтаксисе — все импортируемые модули (`ktalk_mcp.cli`,
-`ktalk_mcp.cli_meeting`, `ktalk_mcp.cli_meetings_read`, `ktalk_mcp.cli_contacts`)
+импорте/синтаксисе — все импортируемые модули (`ktalk_cli.cli`,
+`ktalk_cli.cli_meeting`, `ktalk_cli.cli_meetings_read`, `ktalk_cli.cli_contacts`)
 уже существуют в 0.7.0.
 """
 
@@ -34,7 +34,7 @@ def _run(argv, monkeypatch=None, base_url="https://test.ktalk.ru", session_token
         monkeypatch.setenv("KTALK_BASE_URL", base_url)
         monkeypatch.setenv("KTALK_SESSION_TOKEN", session_token)
         monkeypatch.delenv("KTALK_PERSONAL_API_KEY", raising=False)
-    from ktalk_mcp.cli import main
+    from ktalk_cli.cli import main
 
     return main(["--db", BAD_DB, *argv])
 
@@ -55,7 +55,7 @@ def _with_real_pty(monkeypatch, input_line: str):
 
 
 def test_ac_32_1b_list_calendar_requires_start_and_end_no_silent_default():
-    from ktalk_mcp.cli import build_parser
+    from ktalk_cli.cli import build_parser
 
     parser = build_parser()
     with pytest.raises(SystemExit):
@@ -158,7 +158,7 @@ def test_ac_34_1c_cancel_meeting_commands_accept_json_flag():
     вызывается, машиночитаемый вывод не нужен». Волна 6 отменила посылку: агент
     вызывает `*-confirm` сам и обязан разобрать исход машинно. Тест переименован
     из `..._reject_json_flag` вслед за сменой контракта."""
-    from ktalk_mcp.cli import build_parser
+    from ktalk_cli.cli import build_parser
 
     parser = build_parser()
     assert parser.parse_args(["cancel-meeting-preview", "--id", "x", "--json"]).json is True
@@ -189,7 +189,7 @@ def test_dev009_cancel_meeting_preview_json_zero_network_with_confirmation_id(
 
 
 def test_ac_34_2b_cancel_meeting_id_is_required_on_both_subcommands():
-    from ktalk_mcp.cli import build_parser
+    from ktalk_cli.cli import build_parser
 
     parser = build_parser()
     with pytest.raises(SystemExit):
@@ -252,7 +252,7 @@ def test_search_contacts_rejects_json_flag():
     (`at-design-ktalk-plugin-meetings.md`, FR-35), тело перевёрнуто на проверку
     нового контракта — см. дев-заметку
     `content/60-implementation/dev-009-cli-json-and-exit-codes.md`."""
-    from ktalk_mcp.cli import build_parser
+    from ktalk_cli.cli import build_parser
 
     parser = build_parser()
     args = parser.parse_args(["search-contacts", "--query", "x", "--json"])
@@ -305,7 +305,7 @@ def test_ac_35_3_zero_matches_vs_network_error_are_distinguishable_by_exit_code_
 
 
 def test_get_room_has_no_availability_check_flag():
-    from ktalk_mcp.cli import build_parser
+    from ktalk_cli.cli import build_parser
 
     parser = build_parser()
     args = parser.parse_args(["get-room", "some-room", "--json"])
@@ -372,7 +372,7 @@ def test_ac_37_1_cli_error_text_passthrough_not_replaced_by_generic_message(
 
 
 def test_ac_38_1_meetings_commands_and_escalation_targets_are_all_registry_free():
-    from ktalk_mcp.cli import _REGISTRY_FREE_COMMANDS
+    from ktalk_cli.cli import _REGISTRY_FREE_COMMANDS
 
     meetings_commands = {
         "list-calendar",

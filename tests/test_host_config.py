@@ -7,7 +7,7 @@
 до `.git`/корня ФС; boundary cases из «Контракт с QA-author» (пустой валидный
 файл, неизвестный top-level ключ, `${CLAUDE_PROJECT_DIR}` без файла).
 
-Красные по замыслу: `ktalk_mcp.host_config` не существует — `discover_host_config`,
+Красные по замыслу: `ktalk_cli.host_config` не существует — `discover_host_config`,
 `load_host_config`, `HostConfig`, `HostConfigError` появляются с реализацией Dev
 (ktalk-plugin-spec.md, «Реализовать»).
 """
@@ -28,7 +28,7 @@ def _write_toml(path: Path, content: str) -> Path:
 
 
 def test_ac_fr20_1_config_present_registry_db_path_is_read_from_file(tmp_path):
-    from ktalk_mcp.host_config import load_host_config
+    from ktalk_cli.host_config import load_host_config
 
     config_path = _write_toml(
         tmp_path / ".ktalk.toml",
@@ -39,7 +39,7 @@ def test_ac_fr20_1_config_present_registry_db_path_is_read_from_file(tmp_path):
 
 
 def test_ac_fr20_1_config_present_routing_and_directories_read_from_file(tmp_path):
-    from ktalk_mcp.host_config import load_host_config
+    from ktalk_cli.host_config import load_host_config
 
     config_path = _write_toml(
         tmp_path / ".ktalk.toml",
@@ -61,7 +61,7 @@ def test_ac_fr20_1_config_present_routing_and_directories_read_from_file(tmp_pat
 def test_ac_fr20_2_no_config_file_discovery_returns_none_without_raising(
     tmp_path, monkeypatch
 ):
-    from ktalk_mcp.host_config import discover_host_config
+    from ktalk_cli.host_config import discover_host_config
 
     monkeypatch.delenv("CLAUDE_PROJECT_DIR", raising=False)
     monkeypatch.chdir(tmp_path)  # нет .ktalk.toml, нет .git — упрётся в корень ФС
@@ -71,7 +71,7 @@ def test_ac_fr20_2_no_config_file_discovery_returns_none_without_raising(
 def test_ac_fr20_2_empty_valid_toml_equivalent_to_no_config_per_key(tmp_path):
     """Boundary (Контракт с QA-author): пустой валидный TOML — не ошибка, каждый
     ключ трактуется как отсутствующий, не как «объявлен пустым»."""
-    from ktalk_mcp.host_config import load_host_config
+    from ktalk_cli.host_config import load_host_config
 
     config_path = _write_toml(tmp_path / ".ktalk.toml", "")
     host_config = load_host_config(config_path)
@@ -86,7 +86,7 @@ def test_ac_fr20_2_empty_valid_toml_equivalent_to_no_config_per_key(tmp_path):
 def test_ac_fr20_3_malformed_toml_syntax_raises_host_config_error_naming_file(
     tmp_path,
 ):
-    from ktalk_mcp.host_config import HostConfigError, load_host_config
+    from ktalk_cli.host_config import HostConfigError, load_host_config
 
     config_path = _write_toml(tmp_path / ".ktalk.toml", "this is not [valid toml")
     with pytest.raises(HostConfigError) as exc_info:
@@ -97,7 +97,7 @@ def test_ac_fr20_3_malformed_toml_syntax_raises_host_config_error_naming_file(
 def test_ac_fr20_3_unknown_top_level_key_raises_host_config_error(tmp_path):
     """Boundary: опечатка `[routng]` вместо `[routing]` — неизвестная секция,
     не тихое игнорирование."""
-    from ktalk_mcp.host_config import HostConfigError, load_host_config
+    from ktalk_cli.host_config import HostConfigError, load_host_config
 
     config_path = _write_toml(tmp_path / ".ktalk.toml", '[routng]\nstandup = "x"\n')
     with pytest.raises(HostConfigError):
@@ -105,7 +105,7 @@ def test_ac_fr20_3_unknown_top_level_key_raises_host_config_error(tmp_path):
 
 
 def test_ac_fr20_3_non_bool_integrations_qmd_raises_host_config_error(tmp_path):
-    from ktalk_mcp.host_config import HostConfigError, load_host_config
+    from ktalk_cli.host_config import HostConfigError, load_host_config
 
     config_path = _write_toml(tmp_path / ".ktalk.toml", '[integrations]\nqmd = "yes"\n')
     with pytest.raises(HostConfigError):
@@ -114,7 +114,7 @@ def test_ac_fr20_3_non_bool_integrations_qmd_raises_host_config_error(tmp_path):
 
 def test_ac_fr20_3_non_string_routing_value_raises_host_config_error(tmp_path):
     config_path = _write_toml(tmp_path / ".ktalk.toml", "[routing]\nstandup = 123\n")
-    from ktalk_mcp.host_config import HostConfigError, load_host_config
+    from ktalk_cli.host_config import HostConfigError, load_host_config
 
     with pytest.raises(HostConfigError):
         load_host_config(config_path)
@@ -123,7 +123,7 @@ def test_ac_fr20_3_non_string_routing_value_raises_host_config_error(tmp_path):
 def test_ac_fr20_3_malformed_file_does_not_silently_fall_back_to_default(tmp_path):
     """Малформенный файл — процесс останавливается на этом шаге (не продолжает
     на дефолте молча) — discover_host_config не глотает HostConfigError."""
-    from ktalk_mcp.host_config import HostConfigError, discover_host_config
+    from ktalk_cli.host_config import HostConfigError, discover_host_config
 
     _write_toml(tmp_path / ".ktalk.toml", "not valid toml [[[")
     with pytest.raises(HostConfigError):
@@ -136,7 +136,7 @@ def test_ac_fr20_3_malformed_file_does_not_silently_fall_back_to_default(tmp_pat
 def test_discovery_claude_project_dir_set_reads_config_at_exact_root(
     tmp_path, monkeypatch
 ):
-    from ktalk_mcp.host_config import discover_host_config
+    from ktalk_cli.host_config import discover_host_config
 
     _write_toml(tmp_path / ".ktalk.toml", '[registry]\ndb_path = "x.db"\n')
     monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(tmp_path))
@@ -151,7 +151,7 @@ def test_discovery_claude_project_dir_set_but_file_absent_returns_none_no_walkup
     """${CLAUDE_PROJECT_DIR} задан, но `.ktalk.toml` по этому пути отсутствует —
     FR-20 AC2 (нет ошибки, дефолт), обхода вверх при этом НЕТ, даже если родитель
     несёт валидный конфиг."""
-    from ktalk_mcp.host_config import discover_host_config
+    from ktalk_cli.host_config import discover_host_config
 
     parent = tmp_path
     child = parent / "project"
@@ -166,7 +166,7 @@ def test_discovery_claude_project_dir_set_but_file_absent_returns_none_no_walkup
 
 def test_discovery_bare_cli_walks_up_from_cwd_to_nearest_config(tmp_path, monkeypatch):
     monkeypatch.delenv("CLAUDE_PROJECT_DIR", raising=False)
-    from ktalk_mcp.host_config import discover_host_config
+    from ktalk_cli.host_config import discover_host_config
 
     root = tmp_path / "host"
     nested = root / "a" / "b"
@@ -186,7 +186,7 @@ def test_discovery_bare_cli_stops_at_git_boundary_before_ancestor_config(
     ЧУЖОГО репозитория не подхватывается, даже если .git-каталог сам конфига не
     несёт."""
     monkeypatch.delenv("CLAUDE_PROJECT_DIR", raising=False)
-    from ktalk_mcp.host_config import discover_host_config
+    from ktalk_cli.host_config import discover_host_config
 
     outer_ancestor = tmp_path
     _write_toml(outer_ancestor / ".ktalk.toml", '[registry]\ndb_path = "should-not-be-found.db"\n')
@@ -202,7 +202,7 @@ def test_discovery_bare_cli_stops_at_filesystem_root_if_no_git_and_no_config(
     tmp_path, monkeypatch
 ):
     monkeypatch.delenv("CLAUDE_PROJECT_DIR", raising=False)
-    from ktalk_mcp.host_config import discover_host_config
+    from ktalk_cli.host_config import discover_host_config
 
     nested = tmp_path / "a" / "b" / "c"
     nested.mkdir(parents=True)
@@ -216,7 +216,7 @@ def test_discovery_bare_cli_config_at_git_boundary_itself_is_used(tmp_path, monk
     """Конфиг лежит ровно в каталоге с `.git` (граница проекта) — используется,
     обход не идёт дальше вверх ошибочно раньше срока."""
     monkeypatch.delenv("CLAUDE_PROJECT_DIR", raising=False)
-    from ktalk_mcp.host_config import discover_host_config
+    from ktalk_cli.host_config import discover_host_config
 
     repo_root = tmp_path / "repo"
     nested = repo_root / "sub"
@@ -233,7 +233,7 @@ def test_discovery_no_merge_of_two_levels_nearest_wins_entirely(tmp_path, monkey
     """Discovery п.4: слияния конфигов разных уровней нет — найден ближайший,
     дальше не смотрит, даже если у него меньше ключей, чем у предка."""
     monkeypatch.delenv("CLAUDE_PROJECT_DIR", raising=False)
-    from ktalk_mcp.host_config import discover_host_config
+    from ktalk_cli.host_config import discover_host_config
 
     outer = tmp_path
     _write_toml(

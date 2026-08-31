@@ -1,4 +1,4 @@
-"""AT-design: FR-13/NFR-9 — компоновщик тела встречи (`ktalk_mcp.meeting_body`).
+"""AT-design: FR-13/NFR-9 — компоновщик тела встречи (`ktalk_cli.meeting_body`).
 
 ADR-009: состав тела приведён к живому снимку DevTools — `enableSip`/
 `requiredUserKeys` удалены (структурно недостижимы), `requiredAttendees`
@@ -44,7 +44,7 @@ _REQUIRED_KWARG_TO_FIELD = [
 def test_nfr9_field_not_passed_explicitly_rejects_before_any_side_effect(kwarg, field_name):
     """AC NFR-9/FR-13: поле не передано явно (`None`) -> запрос отклоняется с указанием
     конкретного отсутствующего поля."""
-    from ktalk_mcp.meeting_body import MissingFieldError, build_meeting_body
+    from ktalk_cli.meeting_body import MissingFieldError, build_meeting_body
 
     kwargs = dict(FULL_KWARGS)
     kwargs[kwarg] = None
@@ -58,7 +58,7 @@ def test_nfr9_field_not_passed_explicitly_rejects_before_any_side_effect(kwarg, 
 def test_nfr9_empty_required_attendee_keys_list_is_a_valid_explicit_decision():
     """Явный пустой список участников — валидное явное решение «без обязательных
     участников», не то же самое, что «участники не указаны» (None)."""
-    from ktalk_mcp.meeting_body import build_meeting_body
+    from ktalk_cli.meeting_body import build_meeting_body
 
     kwargs = dict(FULL_KWARGS)
     kwargs["required_attendee_keys"] = []
@@ -71,7 +71,7 @@ def test_nfr9_empty_required_attendee_keys_list_is_a_valid_explicit_decision():
 def test_nfr9_explicit_boolean_false_is_not_confused_with_missing(value):
     """`enableAutoRecording`/`allowAnonymous` явно переданные `False` — валидные
     решения, не путаются с отсутствием значения (`is None`, не truthiness)."""
-    from ktalk_mcp.meeting_body import build_meeting_body
+    from ktalk_cli.meeting_body import build_meeting_body
 
     kwargs = dict(FULL_KWARGS)
     kwargs["enable_auto_recording"] = value
@@ -86,7 +86,7 @@ def test_nfr9_explicit_boolean_false_is_not_confused_with_missing(value):
 
 def test_description_omitted_gets_quiet_empty_string_default():
     """`description` — единственное поле с разрешённым тихим дефолтом (NFR-9)."""
-    from ktalk_mcp.meeting_body import build_meeting_body
+    from ktalk_cli.meeting_body import build_meeting_body
 
     kwargs = dict(FULL_KWARGS)
     kwargs["description"] = None
@@ -97,7 +97,7 @@ def test_description_omitted_gets_quiet_empty_string_default():
 
 def test_build_meeting_body_full_valid_kwargs_produces_exact_allow_list():
     """ADR-009: состав тела — ровно 13 ключей снимка DevTools, не 11 (ADR-005)."""
-    from ktalk_mcp.meeting_body import build_meeting_body
+    from ktalk_cli.meeting_body import build_meeting_body
 
     body = build_meeting_body(**FULL_KWARGS)
 
@@ -126,7 +126,7 @@ def test_build_meeting_body_has_no_parameter_for_recurrence_fields():
     поведения (нет параметра, который можно было бы передать)."""
     import inspect
 
-    from ktalk_mcp.meeting_body import build_meeting_body
+    from ktalk_cli.meeting_body import build_meeting_body
 
     params = set(inspect.signature(build_meeting_body).parameters)
     assert "is_recurring" not in params
@@ -140,7 +140,7 @@ def test_build_meeting_body_has_no_parameter_for_enable_sip_or_required_user_key
     рантайм-ошибку построения тела."""
     import inspect
 
-    from ktalk_mcp.meeting_body import build_meeting_body
+    from ktalk_cli.meeting_body import build_meeting_body
 
     params = set(inspect.signature(build_meeting_body).parameters)
     assert "enable_sip" not in params
@@ -148,7 +148,7 @@ def test_build_meeting_body_has_no_parameter_for_enable_sip_or_required_user_key
 
 
 def test_build_meeting_body_rejects_removed_kwargs_with_type_error():
-    from ktalk_mcp.meeting_body import build_meeting_body
+    from ktalk_cli.meeting_body import build_meeting_body
 
     kwargs = dict(FULL_KWARGS)
     kwargs["enable_sip"] = True
@@ -163,7 +163,7 @@ def test_build_meeting_body_has_no_parameter_for_fields_outside_agreed_scope():
     параметры вызывающего."""
     import inspect
 
-    from ktalk_mcp.meeting_body import build_meeting_body
+    from ktalk_cli.meeting_body import build_meeting_body
 
     params = set(inspect.signature(build_meeting_body).parameters)
     out_of_scope = {
@@ -184,7 +184,7 @@ def test_build_meeting_body_has_no_parameter_for_fields_outside_agreed_scope():
 
 
 def test_fixed_literals_present_regardless_of_caller_input():
-    from ktalk_mcp.meeting_body import build_meeting_body
+    from ktalk_cli.meeting_body import build_meeting_body
 
     body = build_meeting_body(**FULL_KWARGS)
 
@@ -201,7 +201,7 @@ def test_fixed_literals_present_regardless_of_caller_input():
 
 
 def test_start_end_converted_to_utc_with_z_suffix_and_milliseconds():
-    from ktalk_mcp.meeting_body import build_meeting_body
+    from ktalk_cli.meeting_body import build_meeting_body
 
     body = build_meeting_body(**FULL_KWARGS)
 
@@ -214,7 +214,7 @@ def test_start_end_converted_to_utc_with_z_suffix_and_milliseconds():
 
 
 def test_build_required_attendees_wraps_numeric_keys_as_user_type_objects():
-    from ktalk_mcp.meeting_body import build_required_attendees
+    from ktalk_cli.meeting_body import build_required_attendees
 
     assert build_required_attendees(["1001", "1002"]) == [
         {"type": "user", "key": "1001"},
@@ -225,7 +225,7 @@ def test_build_required_attendees_wraps_numeric_keys_as_user_type_objects():
 def test_build_meeting_body_does_not_validate_attendee_key_format():
     """Edge case контракта QA-author: логин вместо числового id не отвергается
     компоновщиком — задокументированный предел, не баг."""
-    from ktalk_mcp.meeting_body import build_meeting_body
+    from ktalk_cli.meeting_body import build_meeting_body
 
     kwargs = dict(FULL_KWARGS)
     kwargs["required_attendee_keys"] = ["vkuznetsov"]
@@ -238,7 +238,7 @@ def test_build_meeting_body_does_not_validate_attendee_key_format():
 
 
 def test_pin_code_none_without_explicit_flag_raises_missing_field_error():
-    from ktalk_mcp.meeting_body import MissingFieldError, build_meeting_body
+    from ktalk_cli.meeting_body import MissingFieldError, build_meeting_body
 
     kwargs = dict(FULL_KWARGS)
     kwargs["pin_code"] = None
@@ -249,7 +249,7 @@ def test_pin_code_none_without_explicit_flag_raises_missing_field_error():
 
 
 def test_pin_code_explicit_none_produces_json_null():
-    from ktalk_mcp.meeting_body import build_meeting_body
+    from ktalk_cli.meeting_body import build_meeting_body
 
     kwargs = dict(FULL_KWARGS)
     kwargs["pin_code"] = None
@@ -260,7 +260,7 @@ def test_pin_code_explicit_none_produces_json_null():
 
 
 def test_pin_code_string_value_is_passed_through():
-    from ktalk_mcp.meeting_body import build_meeting_body
+    from ktalk_cli.meeting_body import build_meeting_body
 
     body = build_meeting_body(**FULL_KWARGS)
     assert body["pinCode"] == "1234"
@@ -269,7 +269,7 @@ def test_pin_code_string_value_is_passed_through():
 def test_pin_code_explicit_none_wins_over_conflicting_string_value():
     """Оба сигнала переданы одновременно — `pin_code_explicit_none=True`
     побеждает (порядок разрешения конфликта — решение Dev, зафиксировано тестом)."""
-    from ktalk_mcp.meeting_body import build_meeting_body
+    from ktalk_cli.meeting_body import build_meeting_body
 
     kwargs = dict(FULL_KWARGS)
     kwargs["pin_code"] = "1234"
@@ -283,7 +283,7 @@ def test_pin_code_explicit_none_wins_over_conflicting_string_value():
 
 
 def test_allow_anonymous_true_without_expiration_raises_missing_field_error():
-    from ktalk_mcp.meeting_body import MissingFieldError, build_meeting_body
+    from ktalk_cli.meeting_body import MissingFieldError, build_meeting_body
 
     kwargs = dict(FULL_KWARGS)
     kwargs["allow_anonymous"] = True
@@ -295,7 +295,7 @@ def test_allow_anonymous_true_without_expiration_raises_missing_field_error():
 
 
 def test_allow_anonymous_true_with_expiration_sets_field():
-    from ktalk_mcp.meeting_body import build_meeting_body
+    from ktalk_cli.meeting_body import build_meeting_body
 
     kwargs = dict(FULL_KWARGS)
     kwargs["allow_anonymous"] = True
@@ -306,7 +306,7 @@ def test_allow_anonymous_true_with_expiration_sets_field():
 
 
 def test_allow_anonymous_false_expiration_field_is_none():
-    from ktalk_mcp.meeting_body import build_meeting_body
+    from ktalk_cli.meeting_body import build_meeting_body
 
     body = build_meeting_body(**FULL_KWARGS)  # allow_anonymous=False в FULL_KWARGS
     assert body["anonymousAccessExpirationDate"] is None
@@ -315,7 +315,7 @@ def test_allow_anonymous_false_expiration_field_is_none():
 def test_allow_anonymous_false_with_expiration_value_passed_is_dropped_not_raised():
     """Edge case контракта QA-author: `allow_anonymous=False` + значение передано
     -> значение отбрасывается (поле неприменимо), не ошибка (решение Dev)."""
-    from ktalk_mcp.meeting_body import build_meeting_body
+    from ktalk_cli.meeting_body import build_meeting_body
 
     kwargs = dict(FULL_KWARGS)
     kwargs["allow_anonymous"] = False
@@ -329,7 +329,7 @@ def test_allow_anonymous_false_with_expiration_value_passed_is_dropped_not_raise
 
 
 def test_canonical_body_hash_stable_regardless_of_key_insertion_order():
-    from ktalk_mcp.meeting_body import canonical_body_hash
+    from ktalk_cli.meeting_body import canonical_body_hash
 
     a = {"subject": "X", "roomName": "R1"}
     b = {"roomName": "R1", "subject": "X"}
@@ -337,7 +337,7 @@ def test_canonical_body_hash_stable_regardless_of_key_insertion_order():
 
 
 def test_canonical_body_hash_differs_when_a_field_changes():
-    from ktalk_mcp.meeting_body import canonical_body_hash
+    from ktalk_cli.meeting_body import canonical_body_hash
 
     a = {"subject": "X", "roomName": "R1"}
     b = {"subject": "X", "roomName": "R2"}
@@ -345,7 +345,7 @@ def test_canonical_body_hash_differs_when_a_field_changes():
 
 
 def test_canonical_body_hash_of_full_body_matches_build_meeting_body_output():
-    from ktalk_mcp.meeting_body import build_meeting_body, canonical_body_hash
+    from ktalk_cli.meeting_body import build_meeting_body, canonical_body_hash
 
     body1 = build_meeting_body(**FULL_KWARGS)
     body2 = build_meeting_body(**FULL_KWARGS)

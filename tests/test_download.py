@@ -5,7 +5,7 @@
 передача). FR-7 AC-1 (session-режим, реальный поток скачивания) — ручная проверка на
 боевом домене, зондом проверено только наличие поля `qualities[].fileUrl` (см. at-design.md).
 
-Красные по замыслу: модуль `ktalk_mcp.download` не существует.
+Красные по замыслу: модуль `ktalk_cli.download` не существует.
 
 Примечание об импортах: `QualityNotFoundError` — рабочее имя исключения (не зафиксировано
 дословно ни в одной спеке); Dev волен назвать иначе — assert проверяет наличие текста
@@ -41,7 +41,7 @@ def test_build_download_url_quotes_space_correctly():
     """Регрессия зонда Ф-7: пробел в имени качества ломает наивную сборку URL
     (`InvalidURL: URL can't contain control characters`) — build_download_url обязан
     квотировать корректно."""
-    from ktalk_mcp.download import build_download_url
+    from ktalk_cli.download import build_download_url
 
     url = build_download_url("REC-DL-001", "900 p")
     assert " " not in url
@@ -50,7 +50,7 @@ def test_build_download_url_quotes_space_correctly():
 def test_ac_fr7_2_quality_with_and_without_space_produce_same_url():
     """AC FR-7/2: `900p` и `900 p` не приводят к ошибке построения запроса и дают
     одинаковый корректно закодированный URL (нормализация имени качества)."""
-    from ktalk_mcp.download import build_download_url
+    from ktalk_cli.download import build_download_url
 
     assert build_download_url("REC-DL-001", "900p") == build_download_url("REC-DL-001", "900 p")
 
@@ -60,8 +60,8 @@ async def test_ac_fr7_3_unknown_quality_gives_readable_message_with_available_li
 ):
     """AC FR-7/3: запрошено качество, которого нет в списке доступных -> понятное
     сообщение с перечнем доступных качеств, а не необработанное исключение."""
-    from ktalk_mcp.client import KTalkClient
-    from ktalk_mcp.download import download_recording_file
+    from ktalk_cli.client import KTalkClient
+    from ktalk_cli.download import download_recording_file
 
     httpx_mock.add_response(json=_fixture_json("recording-detail-with-qualities.json"))
 
@@ -81,8 +81,8 @@ async def test_download_refuses_to_follow_dangling_symlink_at_target_path(
     `target.open("wb")` писал бы СКВОЗЬ такой симлинк в произвольное место, куда он
     указывает, минуя guard `overwrite=False`. `os.O_CREAT | os.O_EXCL` должен отказать
     атомарно вместо того, чтобы молча создать файл по месту назначения симлинка."""
-    from ktalk_mcp.client import KTalkClient
-    from ktalk_mcp.download import download_recording_file
+    from ktalk_cli.client import KTalkClient
+    from ktalk_cli.download import download_recording_file
 
     httpx_mock.add_response(json=_fixture_json("recording-detail-with-qualities.json"))
     httpx_mock.add_response(content=b"payload")
@@ -118,8 +118,8 @@ async def test_r3_apikey_mode_does_not_validate_quality_against_available_list(
     (см. `openspec/specs/recording-data-access/spec.md`, сценарий сужен до
     session-режима): под api-key запрошенное качество используется как есть — это
     зафиксированное ограничение, требующее подтверждения SA, не тихая функция."""
-    from ktalk_mcp.client import KTalkClient
-    from ktalk_mcp.download import download_recording_file
+    from ktalk_cli.client import KTalkClient
+    from ktalk_cli.download import download_recording_file
 
     # Сеть отвечает на ЛЮБОЙ путь (в т.ч. с несуществующим именем качества в URL) —
     # под api-key нет предварительного запроса за деталями записи, есть только
@@ -148,8 +148,8 @@ async def test_ac_fr7_4_download_streams_to_disk_without_full_content_response(
     payload'а, который не помещался бы в один буфер разумного размера. Тест — достижимый
     автоматический прокси за «без буферизации целиком в памяти» (integration на моке,
     per ADR-003-spec test-pyramid); полная гарантия — предмет ревью реализации."""
-    from ktalk_mcp.client import KTalkClient
-    from ktalk_mcp.download import download_recording_file
+    from ktalk_cli.client import KTalkClient
+    from ktalk_cli.download import download_recording_file
 
     payload = b"x" * (5 * 1024 * 1024)  # 5 MiB синтетический файл
     httpx_mock.add_response(json=_fixture_json("recording-detail-with-qualities.json"))

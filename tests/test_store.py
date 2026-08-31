@@ -10,7 +10,7 @@
 Ограничение окружения (CLAUDE.md, задача QA-001): тесты не трогают реальный $HOME —
 `$HOME`/`$XDG_DATA_HOME` подменяются `monkeypatch` на `tmp_path`.
 
-Красные по замыслу: `ktalk_mcp.store` не существует — `resolve_store_root`,
+Красные по замыслу: `ktalk_cli.store` не существует — `resolve_store_root`,
 `detect_sync_dir` появляются с реализацией Dev (ADR-013-spec, «Реализовать»).
 """
 
@@ -22,7 +22,7 @@ import stat
 
 
 def test_ac_fr22_1_store_root_is_not_inside_cwd(tmp_path, monkeypatch):
-    from ktalk_mcp.store import resolve_store_root
+    from ktalk_cli.store import resolve_store_root
 
     fake_home = tmp_path / "home"
     fake_home.mkdir()
@@ -38,7 +38,7 @@ def test_ac_fr22_1_store_root_is_not_inside_cwd(tmp_path, monkeypatch):
 
 
 def test_store_root_respects_xdg_data_home_when_set(tmp_path, monkeypatch):
-    from ktalk_mcp.store import resolve_store_root
+    from ktalk_cli.store import resolve_store_root
 
     xdg = tmp_path / "xdg-data"
     monkeypatch.setenv("XDG_DATA_HOME", str(xdg))
@@ -50,7 +50,7 @@ def test_store_root_respects_xdg_data_home_when_set(tmp_path, monkeypatch):
 def test_store_root_xdg_data_home_empty_string_falls_back_like_unset(tmp_path, monkeypatch):
     """Boundary (ADR-013-spec edge case): `$XDG_DATA_HOME` пустой строкой — не то же
     самое, что путь `""`, поведение как «не задано» (`$HOME/.local/share`)."""
-    from ktalk_mcp.store import resolve_store_root
+    from ktalk_cli.store import resolve_store_root
 
     fake_home = tmp_path / "home"
     fake_home.mkdir()
@@ -64,7 +64,7 @@ def test_store_root_xdg_data_home_empty_string_falls_back_like_unset(tmp_path, m
 
 
 def test_ac_fr22_2_two_calls_from_different_cwd_resolve_to_same_root(tmp_path, monkeypatch):
-    from ktalk_mcp.store import resolve_store_root
+    from ktalk_cli.store import resolve_store_root
 
     monkeypatch.delenv("XDG_DATA_HOME", raising=False)
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
@@ -86,7 +86,7 @@ def test_ac_fr22_2_two_calls_from_different_cwd_resolve_to_same_root(tmp_path, m
 
 
 def test_ac_fr22_3_store_root_created_with_owner_only_permissions(tmp_path, monkeypatch):
-    from ktalk_mcp.store import resolve_store_root
+    from ktalk_cli.store import resolve_store_root
 
     fake_home = tmp_path / "home"
     monkeypatch.delenv("XDG_DATA_HOME", raising=False)
@@ -108,7 +108,7 @@ def test_maj03_existing_root_with_weak_permissions_is_tightened_to_0700(
     к 0700 безусловно, не только при первом создании."""
     import stat
 
-    from ktalk_mcp.store import resolve_store_root
+    from ktalk_cli.store import resolve_store_root
 
     fake_home = tmp_path / "home"
     monkeypatch.delenv("XDG_DATA_HOME", raising=False)
@@ -138,7 +138,7 @@ def test_maj02_resolve_store_root_umask_mutation_documented_not_restored_by_itse
     случайное «улучшение» внутри store.py не расходилось молча с cli.py."""
     import os
 
-    import ktalk_mcp.store as store_mod
+    import ktalk_cli.store as store_mod
 
     fake_home = tmp_path / "home"
     monkeypatch.delenv("XDG_DATA_HOME", raising=False)
@@ -160,8 +160,8 @@ def test_maj02_resolve_store_root_umask_mutation_documented_not_restored_by_itse
 def test_nfr15_registry_db_file_created_with_0600(tmp_path, monkeypatch):
     """NFR-15: файл БД реестра при первом создании — 0600, не 0644 (umask-контролируемо,
     без post-hoc chmod)."""
-    from ktalk_mcp.registry import Registry
-    from ktalk_mcp.store import resolve_store_root
+    from ktalk_cli.registry import Registry
+    from ktalk_cli.store import resolve_store_root
 
     fake_home = tmp_path / "home"
     monkeypatch.delenv("XDG_DATA_HOME", raising=False)
@@ -179,7 +179,7 @@ def test_nfr15_registry_db_file_created_with_0600(tmp_path, monkeypatch):
 
 
 def test_nfr14_detect_sync_dir_true_for_icloud_marker(tmp_path):
-    from ktalk_mcp.store import detect_sync_dir
+    from ktalk_cli.store import detect_sync_dir
 
     path = tmp_path / "Library" / "Mobile Documents" / "com~apple~CloudDocs" / "ktalk"
     is_sync, reason = detect_sync_dir(path)
@@ -188,7 +188,7 @@ def test_nfr14_detect_sync_dir_true_for_icloud_marker(tmp_path):
 
 
 def test_nfr14_detect_sync_dir_true_for_dropbox_marker(tmp_path):
-    from ktalk_mcp.store import detect_sync_dir
+    from ktalk_cli.store import detect_sync_dir
 
     path = tmp_path / "Users" / "me" / "Dropbox" / "ktalk"
     is_sync, _reason = detect_sync_dir(path)
@@ -196,7 +196,7 @@ def test_nfr14_detect_sync_dir_true_for_dropbox_marker(tmp_path):
 
 
 def test_nfr14_detect_sync_dir_false_for_ordinary_path(tmp_path):
-    from ktalk_mcp.store import detect_sync_dir
+    from ktalk_cli.store import detect_sync_dir
 
     path = tmp_path / ".local" / "share" / "ktalk"
     is_sync, _reason = detect_sync_dir(path)
@@ -208,7 +208,7 @@ def test_nfr14_detect_sync_dir_no_false_positive_on_marker_as_substring_not_segm
 ):
     """Boundary (ADR-013-spec edge case): `MyDropboxBackup/` не должен ложно
     сработать на маркер `Dropbox` — сегментация по границе каталога, не substring."""
-    from ktalk_mcp.store import detect_sync_dir
+    from ktalk_cli.store import detect_sync_dir
 
     path = tmp_path / "Users" / "me" / "MyDropboxBackup" / "ktalk"
     is_sync, _reason = detect_sync_dir(path)
@@ -218,7 +218,7 @@ def test_nfr14_detect_sync_dir_no_false_positive_on_marker_as_substring_not_segm
 def test_ac_fr22_1_nfr14_machine_default_is_never_flagged_as_sync_dir(tmp_path, monkeypatch):
     """NFR-14 AC-1: резолвленный машинный дефолт проверяется относительно каталогов
     синхронизации — по построению вне них."""
-    from ktalk_mcp.store import detect_sync_dir, resolve_store_root
+    from ktalk_cli.store import detect_sync_dir, resolve_store_root
 
     fake_home = tmp_path / "home"
     monkeypatch.delenv("XDG_DATA_HOME", raising=False)
@@ -236,7 +236,7 @@ def test_nfr14_2_explicit_path_inside_sync_dir_produces_warning_not_block(
     Функция, применяющая путь и печатающая предупреждение — на усмотрение Dev
     (ADR-013-spec §«Поток данных» п.4); здесь используется `warn_if_sync_dir` как
     рабочее имя, точка входа уточняется Dev при реализации."""
-    from ktalk_mcp.store import warn_if_sync_dir
+    from ktalk_cli.store import warn_if_sync_dir
 
     user_path = tmp_path / "Dropbox" / "ktalk" / "registry.db"
     warn_if_sync_dir(user_path)
@@ -262,7 +262,7 @@ def test_nfr14_2_explicit_cli_db_flag_inside_sync_dir_produces_warning(
     monkeypatch.delenv("KTALK_REGISTRY_DB", raising=False)
     monkeypatch.delenv("CLAUDE_PROJECT_DIR", raising=False)
 
-    from ktalk_mcp.cli import main
+    from ktalk_cli.cli import main
 
     rc = main(["--db", str(db_path), "list", "--json"])
     assert rc == 0
@@ -282,7 +282,7 @@ def test_nfr14_2_explicit_env_var_inside_sync_dir_produces_warning(tmp_path, cap
     monkeypatch.delenv("CLAUDE_PROJECT_DIR", raising=False)
     monkeypatch.setenv("KTALK_REGISTRY_DB", str(db_path))
 
-    from ktalk_mcp.cli import main
+    from ktalk_cli.cli import main
 
     rc = main(["list", "--json"])
     assert rc == 0

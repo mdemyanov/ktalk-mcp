@@ -4,7 +4,7 @@ from pathlib import Path
 
 
 def test_schema_and_pragmas(tmp_path: Path):
-    from ktalk_mcp.registry import Registry
+    from ktalk_cli.registry import Registry
 
     db = tmp_path / "r.db"
     with Registry(db) as reg:
@@ -21,7 +21,7 @@ def test_schema_and_pragmas(tmp_path: Path):
 
 
 def test_meta_roundtrip(tmp_path: Path):
-    from ktalk_mcp.registry import Registry
+    from ktalk_cli.registry import Registry
 
     with Registry(tmp_path / "r.db") as reg:
         assert reg.get_meta("missing") is None
@@ -44,7 +44,7 @@ def _rec(rid: str, **over):
 
 
 def test_upsert_inserts_with_default_new_status(tmp_path: Path):
-    from ktalk_mcp.registry import Registry
+    from ktalk_cli.registry import Registry
 
     with Registry(tmp_path / "r.db") as reg:
         assert reg.upsert_recording(_rec("a"), now="2026-06-20") == "inserted"
@@ -56,7 +56,7 @@ def test_upsert_inserts_with_default_new_status(tmp_path: Path):
 
 
 def test_upsert_is_idempotent_and_preserves_status(tmp_path: Path):
-    from ktalk_mcp.registry import Registry
+    from ktalk_cli.registry import Registry
 
     with Registry(tmp_path / "r.db") as reg:
         reg.upsert_recording(_rec("a"), now="2026-06-20")
@@ -74,7 +74,7 @@ def test_upsert_is_idempotent_and_preserves_status(tmp_path: Path):
 
 
 def test_upsert_replaces_participants(tmp_path: Path):
-    from ktalk_mcp.registry import Registry
+    from ktalk_cli.registry import Registry
 
     with Registry(tmp_path / "r.db") as reg:
         reg.upsert_recording(
@@ -91,7 +91,7 @@ def test_upsert_replaces_participants(tmp_path: Path):
 
 
 def test_mark_done_sets_paths_and_processed_at(tmp_path: Path):
-    from ktalk_mcp.registry import Registry
+    from ktalk_cli.registry import Registry
 
     with Registry(tmp_path / "r.db") as reg:
         reg.upsert_recording(_rec("a"), now="2026-06-20")
@@ -115,7 +115,7 @@ def test_mark_done_sets_paths_and_processed_at(tmp_path: Path):
 def test_set_status_rejects_unknown_status(tmp_path: Path):
     import pytest
 
-    from ktalk_mcp.registry import Registry
+    from ktalk_cli.registry import Registry
 
     with Registry(tmp_path / "r.db") as reg:
         reg.upsert_recording(_rec("a"), now="2026-06-20")
@@ -126,7 +126,7 @@ def test_set_status_rejects_unknown_status(tmp_path: Path):
 def test_set_status_missing_recording_raises(tmp_path: Path):
     import pytest
 
-    from ktalk_mcp.registry import Registry
+    from ktalk_cli.registry import Registry
 
     with Registry(tmp_path / "r.db") as reg:
         with pytest.raises(KeyError):
@@ -134,7 +134,7 @@ def test_set_status_missing_recording_raises(tmp_path: Path):
 
 
 def test_list_recordings_filter_and_order(tmp_path: Path):
-    from ktalk_mcp.registry import Registry
+    from ktalk_cli.registry import Registry
 
     with Registry(tmp_path / "r.db") as reg:
         reg.upsert_recording(_rec("a", date="2026-06-20"), now="2026-06-20")
@@ -149,7 +149,7 @@ def test_list_recordings_filter_and_order(tmp_path: Path):
 def test_set_vault_id(tmp_path: Path):
     import pytest
 
-    from ktalk_mcp.registry import Registry
+    from ktalk_cli.registry import Registry
 
     with Registry(tmp_path / "r.db") as reg:
         reg.upsert_recording(
@@ -164,7 +164,7 @@ def test_set_vault_id(tmp_path: Path):
 
 
 def test_expire_new_boundary_exactly_7_days(tmp_path: Path):
-    from ktalk_mcp.registry import Registry
+    from ktalk_cli.registry import Registry
 
     with Registry(tmp_path / "r.db") as reg:
         # now = 2026-06-25, days = 7 -> cutoff 2026-06-18
@@ -185,7 +185,7 @@ def test_expire_new_boundary_exactly_7_days(tmp_path: Path):
 def test_concurrent_writers_both_persist(tmp_path: Path):
     import threading
 
-    from ktalk_mcp.registry import Registry
+    from ktalk_cli.registry import Registry
 
     db = tmp_path / "r.db"
     # Seed two recordings via one connection, then close it.
@@ -219,7 +219,7 @@ def test_concurrent_writers_both_persist(tmp_path: Path):
 
 
 def test_recording_fields_from_api():
-    from ktalk_mcp.registry import recording_fields_from_api
+    from ktalk_cli.registry import recording_fields_from_api
 
     rec = {
         "id": "OowNhGRNjLOG3MshMC6i",
@@ -236,7 +236,7 @@ def test_recording_fields_from_api():
 
 
 def test_participants_from_api():
-    from ktalk_mcp.registry import participants_from_api
+    from ktalk_cli.registry import participants_from_api
 
     rec = {
         "participants": [
@@ -254,7 +254,7 @@ def test_participants_from_api():
 
 
 def test_render_markdown_mirror(tmp_path: Path):
-    from ktalk_mcp.registry import Registry, render_markdown_mirror
+    from ktalk_cli.registry import Registry, render_markdown_mirror
 
     with Registry(tmp_path / "r.db") as reg:
         reg.upsert_recording(

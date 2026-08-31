@@ -10,7 +10,7 @@ rooms-calendar-spec.md).
 Контрольная операция для обоих режимов — `list_recordings(top=1)` (rooms-calendar-spec
 §3, отступление от иллюстративного примера ADR-004-spec).
 
-Красные по замыслу: `ktalk_mcp.contour_diagnostics` не существует.
+Красные по замыслу: `ktalk_cli.contour_diagnostics` не существует.
 """
 
 from __future__ import annotations
@@ -36,14 +36,14 @@ def session_token():
 def test_require_contract_field_missing_anchor_raises_contour_drift():
     """200 с телом, из которого пропало поле-якорь контракта -> ContourDriftError,
     не KeyError/None (ADR-004 «Механизм детекции» — деградация формы на коде 200)."""
-    from ktalk_mcp.contour_diagnostics import ContourDriftError, require_contract_field
+    from ktalk_cli.contour_diagnostics import ContourDriftError, require_contract_field
 
     with pytest.raises(ContourDriftError):
         require_contract_field({"foo": "bar"}, "roomName", "get_room")
 
 
 def test_require_contract_field_present_field_does_not_raise():
-    from ktalk_mcp.contour_diagnostics import require_contract_field
+    from ktalk_cli.contour_diagnostics import require_contract_field
 
     require_contract_field({"roomName": "test-room-alpha"}, "roomName", "get_room")
 
@@ -51,8 +51,8 @@ def test_require_contract_field_present_field_does_not_raise():
 def test_contour_drift_error_is_a_ktalk_error():
     """ContourDriftError — подкласс KTalkError (наследует обработку/маскирование
     ошибок CLI/MCP, не отдельная иерархия)."""
-    from ktalk_mcp.client import KTalkError
-    from ktalk_mcp.contour_diagnostics import ContourDriftError
+    from ktalk_cli.client import KTalkError
+    from ktalk_cli.contour_diagnostics import ContourDriftError
 
     assert issubclass(ContourDriftError, KTalkError)
 
@@ -65,8 +65,8 @@ async def test_diag_404_undocumented_control_200_raises_contour_drift(
 ):
     """недок=404 / контроль=200 -> контрольная операция в порядке, сбой локализован в
     недокументированном пути -> ContourDriftError."""
-    from ktalk_mcp.client import KTalkClient, KTalkNotFoundError
-    from ktalk_mcp.contour_diagnostics import ContourDriftError, diagnose_undocumented_failure
+    from ktalk_cli.client import KTalkClient, KTalkNotFoundError
+    from ktalk_cli.contour_diagnostics import ContourDriftError, diagnose_undocumented_failure
 
     httpx_mock.add_response(json={"recordings": []})  # control: list_recordings(top=1)
 
@@ -81,8 +81,8 @@ async def test_diag_401_undocumented_control_401_reraises_original(
 ):
     """недок=401 / контроль=401 -> контроль тоже провалился, это не дрейф контура,
     исходная ошибка перевыбрасывается как есть."""
-    from ktalk_mcp.client import KTalkAuthError, KTalkClient
-    from ktalk_mcp.contour_diagnostics import diagnose_undocumented_failure
+    from ktalk_cli.client import KTalkAuthError, KTalkClient
+    from ktalk_cli.contour_diagnostics import diagnose_undocumented_failure
 
     httpx_mock.add_response(status_code=401)  # control также 401
 
@@ -97,8 +97,8 @@ async def test_diag_403_undocumented_control_403_reraises_original(
     httpx_mock: HTTPXMock, base_url, session_token
 ):
     """недок=403 / контроль=403 -> тот же принцип, что 401/401."""
-    from ktalk_mcp.client import KTalkAuthError, KTalkClient
-    from ktalk_mcp.contour_diagnostics import diagnose_undocumented_failure
+    from ktalk_cli.client import KTalkAuthError, KTalkClient
+    from ktalk_cli.contour_diagnostics import diagnose_undocumented_failure
 
     httpx_mock.add_response(status_code=403)
 
@@ -118,8 +118,8 @@ async def test_diag_401_control_also_401_attaches_control_probe_with_class_code_
     """DEV-008: контроль тоже провалился -> на перевыброшенном исключении должен
     появиться атрибут с исходом контроля (класс/HTTP-код/текст), а не тишина —
     ровно то слепое пятно, что стоило четырёх боевых POST подряд."""
-    from ktalk_mcp.client import KTalkAuthError, KTalkClient
-    from ktalk_mcp.contour_diagnostics import diagnose_undocumented_failure
+    from ktalk_cli.client import KTalkAuthError, KTalkClient
+    from ktalk_cli.contour_diagnostics import diagnose_undocumented_failure
 
     httpx_mock.add_response(status_code=401)  # control также 401
 
@@ -137,8 +137,8 @@ async def test_diag_401_control_also_401_attaches_control_probe_with_class_code_
 async def test_diag_403_control_also_403_attaches_control_probe_with_class_code_text(
     httpx_mock: HTTPXMock, base_url, session_token
 ):
-    from ktalk_mcp.client import KTalkAuthError, KTalkClient
-    from ktalk_mcp.contour_diagnostics import diagnose_undocumented_failure
+    from ktalk_cli.client import KTalkAuthError, KTalkClient
+    from ktalk_cli.contour_diagnostics import diagnose_undocumented_failure
 
     httpx_mock.add_response(status_code=403)
 
@@ -158,8 +158,8 @@ async def test_diag_network_error_control_also_network_error_attaches_control_pr
 ):
     """Контроль падает не HTTP-кодом, а сетевой ошибкой -> явно «без HTTP-кода», не
     молчание и не выдуманный код."""
-    from ktalk_mcp.client import KTalkClient
-    from ktalk_mcp.contour_diagnostics import diagnose_undocumented_failure
+    from ktalk_cli.client import KTalkClient
+    from ktalk_cli.contour_diagnostics import diagnose_undocumented_failure
 
     httpx_mock.add_exception(httpx.ConnectError("connection refused"))
 
@@ -177,8 +177,8 @@ async def test_diag_unknown_400_undocumented_control_200_raises_contour_drift(
     httpx_mock: HTTPXMock, base_url, session_token
 ):
     """недок=неизвестный 400 / контроль=200 -> ContourDriftError."""
-    from ktalk_mcp.client import KTalkClient, KTalkError
-    from ktalk_mcp.contour_diagnostics import ContourDriftError, diagnose_undocumented_failure
+    from ktalk_cli.client import KTalkClient, KTalkError
+    from ktalk_cli.contour_diagnostics import ContourDriftError, diagnose_undocumented_failure
 
     httpx_mock.add_response(json={"recordings": []})
 
@@ -193,8 +193,8 @@ async def test_diag_network_error_undocumented_control_200_raises_contour_drift(
 ):
     """недок=сетевая ошибка / контроль=200 -> ContourDriftError (TRANSIENT_ERRORS
     включает httpx.HTTPError, не только KTalkError)."""
-    from ktalk_mcp.client import KTalkClient
-    from ktalk_mcp.contour_diagnostics import ContourDriftError, diagnose_undocumented_failure
+    from ktalk_cli.client import KTalkClient
+    from ktalk_cli.contour_diagnostics import ContourDriftError, diagnose_undocumented_failure
 
     httpx_mock.add_response(json={"recordings": []})
 
@@ -213,8 +213,8 @@ async def test_diag_401_undocumented_control_200_raises_write_auth_mismatch(
     """ADR-008: недок=401 / контроль=200 -> credential подтверждён рабочим в ту же
     секунду -> `KTalkWriteAuthMismatchError`, не `ContourDriftError`. Текст не советует
     обновить токен и называет операцию."""
-    from ktalk_mcp.client import KTalkAuthError, KTalkClient, KTalkWriteAuthMismatchError
-    from ktalk_mcp.contour_diagnostics import diagnose_undocumented_failure
+    from ktalk_cli.client import KTalkAuthError, KTalkClient, KTalkWriteAuthMismatchError
+    from ktalk_cli.contour_diagnostics import diagnose_undocumented_failure
 
     httpx_mock.add_response(json={"recordings": []})  # control: list_recordings(top=1)
 
@@ -235,8 +235,8 @@ async def test_diag_403_session_undocumented_control_200_raises_write_auth_misma
 ):
     """ADR-008: недок=403 session (без scope-контекста) / контроль=200 -> та же ветка —
     session-403 не является `KTalkScopeError` (подкласс только для api-key)."""
-    from ktalk_mcp.client import KTalkAuthError, KTalkClient, KTalkWriteAuthMismatchError
-    from ktalk_mcp.contour_diagnostics import diagnose_undocumented_failure
+    from ktalk_cli.client import KTalkAuthError, KTalkClient, KTalkWriteAuthMismatchError
+    from ktalk_cli.contour_diagnostics import diagnose_undocumented_failure
 
     httpx_mock.add_response(json={"recordings": []})
 
@@ -253,8 +253,8 @@ async def test_diag_403_scope_undocumented_control_200_raises_contour_drift_not_
     `KTalkWriteAuthMismatchError` не срабатывает (scope-ошибка исключена явно) —
     поведение как до ADR-008 (`ContourDriftError`), regression на уровне модуля
     (сценарий вне рамок `create_meeting`, где api-key fail-closed)."""
-    from ktalk_mcp.client import KTalkClient, KTalkScopeError, KTalkWriteAuthMismatchError
-    from ktalk_mcp.contour_diagnostics import ContourDriftError, diagnose_undocumented_failure
+    from ktalk_cli.client import KTalkClient, KTalkScopeError, KTalkWriteAuthMismatchError
+    from ktalk_cli.contour_diagnostics import ContourDriftError, diagnose_undocumented_failure
 
     httpx_mock.add_response(json={"recordings": []})
 
@@ -270,7 +270,7 @@ async def test_diag_403_scope_undocumented_control_200_raises_contour_drift_not_
 
 async def test_write_auth_mismatch_error_is_subclass_of_ktalk_auth_error():
     """Обратная совместимость: `except KTalkAuthError` продолжает ловить новый класс."""
-    from ktalk_mcp.client import KTalkAuthError, KTalkWriteAuthMismatchError
+    from ktalk_cli.client import KTalkAuthError, KTalkWriteAuthMismatchError
 
     assert issubclass(KTalkWriteAuthMismatchError, KTalkAuthError)
 
@@ -280,8 +280,8 @@ async def test_response_body_attribute_transfers_through_correlation_to_write_au
 ):
     """ADR-008 §3: `response_body`, прикреплённый к исходной ошибке до вызова
     `diagnose_undocumented_failure`, переносится на `KTalkWriteAuthMismatchError`."""
-    from ktalk_mcp.client import KTalkAuthError, KTalkClient, KTalkWriteAuthMismatchError
-    from ktalk_mcp.contour_diagnostics import diagnose_undocumented_failure
+    from ktalk_cli.client import KTalkAuthError, KTalkClient, KTalkWriteAuthMismatchError
+    from ktalk_cli.contour_diagnostics import diagnose_undocumented_failure
 
     httpx_mock.add_response(json={"recordings": []})
 
@@ -297,8 +297,8 @@ async def test_response_body_attribute_transfers_through_correlation_to_write_au
 async def test_diag_transient_errors_tuple_covers_ktalk_error_and_httpx_error():
     """TRANSIENT_ERRORS — публичная константа, используемая вызывающими модулями
     (`rooms.py`/`calendar_reader.py`) в `except TRANSIENT_ERRORS`."""
-    from ktalk_mcp.client import KTalkError
-    from ktalk_mcp.contour_diagnostics import TRANSIENT_ERRORS
+    from ktalk_cli.client import KTalkError
+    from ktalk_cli.contour_diagnostics import TRANSIENT_ERRORS
 
     assert KTalkError in TRANSIENT_ERRORS
     assert httpx.HTTPError in TRANSIENT_ERRORS

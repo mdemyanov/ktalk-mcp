@@ -1,11 +1,11 @@
-"""AT-design: FR-13 — оркестрация предпросмотра/создания (`ktalk_mcp.meeting_scheduling`).
+"""AT-design: FR-13 — оркестрация предпросмотра/создания (`ktalk_cli.meeting_scheduling`).
 
 Покрывает: предпросмотр не делает сетевых записей (ключевая AC волны — перехват
 исходящих запросов, ноль записывающих вызовов), совпадение состава/значений полей
 предпросмотра и реального тела создания, отсутствие авто-retry на сетевую ошибку
 (ровно одна попытка записи), fail-closed api-key для `create_meeting` (NFR-7).
 
-Красные по замыслу: `ktalk_mcp.meeting_scheduling` не существует.
+Красные по замыслу: `ktalk_cli.meeting_scheduling` не существует.
 """
 
 from __future__ import annotations
@@ -49,7 +49,7 @@ def personal_api_key():
 
 
 def _store():
-    from ktalk_mcp.confirmation import ConfirmationStore
+    from ktalk_cli.confirmation import ConfirmationStore
 
     return ConfirmationStore()
 
@@ -60,7 +60,7 @@ def _store():
 def test_preview_service_has_no_network_client_parameter():
     """`PreviewService.preview` физически не получает `KTalkClient` — структурная
     невозможность сетевого эффекта, не только поведенческая (ADR-005-spec §Компоненты)."""
-    from ktalk_mcp.meeting_scheduling import PreviewService
+    from ktalk_cli.meeting_scheduling import PreviewService
 
     params = set(inspect.signature(PreviewService.preview).parameters) - {"self"}
     assert "client" not in params
@@ -69,7 +69,7 @@ def test_preview_service_has_no_network_client_parameter():
 def test_ac_fr13_1_preview_performs_zero_network_calls(httpx_mock: HTTPXMock):
     """AC FR-13/1: режим предпросмотра не выполняет ни одного сетевого запроса
     (POST/PUT/PATCH/DELETE и вообще никакого) к API Толка."""
-    from ktalk_mcp.meeting_scheduling import PreviewService
+    from ktalk_cli.meeting_scheduling import PreviewService
 
     service = PreviewService(_store())
     body, confirmation_id = service.preview(**FULL_KWARGS)
@@ -85,8 +85,8 @@ def test_ac_fr13_1_preview_performs_zero_network_calls(httpx_mock: HTTPXMock):
 async def test_ac_fr13_2_preview_body_matches_body_sent_at_create(
     httpx_mock: HTTPXMock, base_url, session_token
 ):
-    from ktalk_mcp.client import KTalkClient
-    from ktalk_mcp.meeting_scheduling import PreviewService, create_meeting
+    from ktalk_cli.client import KTalkClient
+    from ktalk_cli.meeting_scheduling import PreviewService, create_meeting
 
     service = PreviewService(_store())
     body, _confirmation_id = service.preview(**FULL_KWARGS)
@@ -110,8 +110,8 @@ async def test_create_meeting_posts_to_api_calendar_path(
     """ADR-007: путь с префиксом `/api` — согласован с `get_room`/`get_calendar`,
     прежняя запись без `/api` была ошибкой прочтения источника (mainpart), не
     намеренным решением."""
-    from ktalk_mcp.client import KTalkClient
-    from ktalk_mcp.meeting_scheduling import create_meeting
+    from ktalk_cli.client import KTalkClient
+    from ktalk_cli.meeting_scheduling import create_meeting
 
     httpx_mock.add_response(status_code=200, json={"id": "MEET-0001"})
 
@@ -132,8 +132,8 @@ async def test_ac_fr13_6_network_failure_does_not_trigger_automatic_retry(
     сам POST автоматически — ровно один фактический вызов на запись. ADR-007 п.3
     добавляет один контрольный GET (диагностика), тоже проваливается -> исходная
     сетевая ошибка, не `ContourDriftError` (edge case контракта QA-author)."""
-    from ktalk_mcp.client import KTalkClient
-    from ktalk_mcp.meeting_scheduling import create_meeting
+    from ktalk_cli.client import KTalkClient
+    from ktalk_cli.meeting_scheduling import create_meeting
 
     httpx_mock.add_exception(
         httpx.ConnectError("connection refused"),
@@ -160,9 +160,9 @@ async def test_create_meeting_404_with_working_control_raises_contour_drift_erro
     """Edge case контракта QA-author: POST /api/calendar -> 404, контроль
     list_recordings(top=1) -> 200 -> `ContourDriftError`, не `KTalkNotFoundError`
     (ADR-007 п.3)."""
-    from ktalk_mcp.client import KTalkClient
-    from ktalk_mcp.contour_diagnostics import ContourDriftError
-    from ktalk_mcp.meeting_scheduling import create_meeting
+    from ktalk_cli.client import KTalkClient
+    from ktalk_cli.contour_diagnostics import ContourDriftError
+    from ktalk_cli.meeting_scheduling import create_meeting
 
     httpx_mock.add_response(
         status_code=404,
@@ -188,8 +188,8 @@ async def test_create_meeting_logs_4xx_body_without_changing_user_message(
     (ADR-007 п.3)."""
     import logging
 
-    from ktalk_mcp.client import KTalkClient, KTalkNotFoundError
-    from ktalk_mcp.meeting_scheduling import create_meeting
+    from ktalk_cli.client import KTalkClient, KTalkNotFoundError
+    from ktalk_cli.meeting_scheduling import create_meeting
 
     httpx_mock.add_response(
         status_code=404,
@@ -220,8 +220,8 @@ async def test_adr009_create_meeting_sends_headers_without_session_token_in_quer
     `Authorization: Session <token>` + `X-Platform: web` отправляются ВМЕСТО
     query-параметра `sessionToken` — единственная известная рабочая
     конфигурация (снимок DevTools)."""
-    from ktalk_mcp.client import KTalkClient
-    from ktalk_mcp.meeting_scheduling import create_meeting
+    from ktalk_cli.client import KTalkClient
+    from ktalk_cli.meeting_scheduling import create_meeting
 
     httpx_mock.add_response(status_code=200, json={"id": "MEET-0001"})
 
@@ -241,8 +241,8 @@ async def test_adr009_read_paths_of_same_client_keep_session_token_in_query_afte
     """ADR-009 §6 / регресс ADR-003: `copy_remove_param` над `httpx.Request` не
     трогает `client._client.params` — read-путь того же клиента после
     `create_meeting` по-прежнему несёт `sessionToken` в query."""
-    from ktalk_mcp.client import KTalkClient
-    from ktalk_mcp.meeting_scheduling import create_meeting
+    from ktalk_cli.client import KTalkClient
+    from ktalk_cli.meeting_scheduling import create_meeting
 
     httpx_mock.add_response(status_code=200, json={"id": "MEET-0001"})
     httpx_mock.add_response(status_code=200, json={"recordings": []})
@@ -265,8 +265,8 @@ async def test_adr009_401_error_message_does_not_leak_session_token(
     """NFR-10: токен не попадает в текст исключения ни в одной ветке — заголовок
     `Authorization` несёт токен транспортно, но не должен всплывать в сообщении
     об ошибке, которое доходит до вывода CLI/MCP."""
-    from ktalk_mcp.client import KTalkClient, KTalkWriteAuthMismatchError
-    from ktalk_mcp.meeting_scheduling import create_meeting
+    from ktalk_cli.client import KTalkClient, KTalkWriteAuthMismatchError
+    from ktalk_cli.meeting_scheduling import create_meeting
 
     httpx_mock.add_response(
         status_code=401,
@@ -292,8 +292,8 @@ async def test_adr008_401_with_working_control_raises_write_auth_mismatch_not_co
 ):
     """ADR-008: POST /api/calendar -> 401, контроль list_recordings(top=1) -> 200 —
     `KTalkWriteAuthMismatchError`, не `ContourDriftError` (правка ADR-007 п.3)."""
-    from ktalk_mcp.client import KTalkClient, KTalkWriteAuthMismatchError
-    from ktalk_mcp.meeting_scheduling import create_meeting
+    from ktalk_cli.client import KTalkClient, KTalkWriteAuthMismatchError
+    from ktalk_cli.meeting_scheduling import create_meeting
 
     httpx_mock.add_response(
         status_code=401,
@@ -319,8 +319,8 @@ async def test_dev008_empty_response_body_attached_as_empty_string_not_absent(
 ):
     """DEV-008: тело пустое — это факт контура, не то же самое, что «тело не
     прикреплено» (transport-уровня ошибка, где ответа вовсе не было)."""
-    from ktalk_mcp.client import KTalkClient, KTalkWriteAuthMismatchError
-    from ktalk_mcp.meeting_scheduling import create_meeting
+    from ktalk_cli.client import KTalkClient, KTalkWriteAuthMismatchError
+    from ktalk_cli.meeting_scheduling import create_meeting
 
     httpx_mock.add_response(
         status_code=401,
@@ -352,8 +352,8 @@ async def test_dev007_control_call_does_not_inherit_cookie_from_failed_post(
     клиенте. Ровно этим объяснялась воспроизведённая расходимость: `auth-status`
     (свежий клиент, без cookie) видел `alive: True`, а контроль внутри уже
     отработавшего клиента иногда — нет."""
-    from ktalk_mcp.client import KTalkClient, KTalkWriteAuthMismatchError
-    from ktalk_mcp.meeting_scheduling import create_meeting
+    from ktalk_cli.client import KTalkClient, KTalkWriteAuthMismatchError
+    from ktalk_cli.meeting_scheduling import create_meeting
 
     httpx_mock.add_response(
         status_code=401,
@@ -387,8 +387,8 @@ async def test_nfr7_create_meeting_apikey_mode_refuses_before_network_call(
 
     Code review (epic-capability-pairing, Р1/Р2): `create_meeting` подтверждён
     только под session — сообщение обязано советовать её, не ключ."""
-    from ktalk_mcp.client import KTalkClient, OperationNotAvailableError
-    from ktalk_mcp.meeting_scheduling import create_meeting
+    from ktalk_cli.client import KTalkClient, OperationNotAvailableError
+    from ktalk_cli.meeting_scheduling import create_meeting
 
     async with KTalkClient(base_url=base_url, personal_api_key=personal_api_key) as client:
         with pytest.raises(OperationNotAvailableError, match="режиме сессии"):

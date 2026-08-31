@@ -6,7 +6,7 @@ AC-3) + все 4 сценария деградации auth_status из ADR-003-
 сети не маскируется под мёртвый ключ».
 
 Красные по замыслу: `KTalkScopeError`, mode-осведомлённый `_check_response`/`_classify`,
-`client.get_auth_status()` — ничего из этого не реализовано в src/ktalk_mcp/client.py.
+`client.get_auth_status()` — ничего из этого не реализовано в src/ktalk_cli/client.py.
 
 Примечание об импортах (для Dev): точные имена AuthStatus.alive/scopes/expired_at/note
 взяты из ADR-003-auth-modes-spec.md (таблица деградации + фраза «AuthStatus.note всегда
@@ -43,7 +43,7 @@ async def test_ac_fr5_1_401_apikey_mentions_personal_api_key_var(httpx_mock: HTT
     -> русскоязычное сообщение с указанием обновить KTALK_PERSONAL_API_KEY."""
     httpx_mock.add_response(status_code=401, json=_fixture_json("error-body-validation.json"))
 
-    from ktalk_mcp.client import KTalkAuthError, KTalkClient
+    from ktalk_cli.client import KTalkAuthError, KTalkClient
 
     async with KTalkClient(base_url=base_url, personal_api_key="pk-1") as client:
         with pytest.raises(KTalkAuthError, match="KTALK_PERSONAL_API_KEY"):
@@ -55,7 +55,7 @@ async def test_ac_fr5_1b_403_apikey_names_missing_scope(httpx_mock: HTTPXMock, b
     (тело в большинстве случаев пустое, зонд Ф-12 — диагностика не зависит от тела)."""
     httpx_mock.add_response(status_code=403, content=b"")
 
-    from ktalk_mcp.client import KTalkClient, KTalkScopeError
+    from ktalk_cli.client import KTalkClient, KTalkScopeError
 
     async with KTalkClient(base_url=base_url, personal_api_key="pk-1") as client:
         with pytest.raises(KTalkScopeError, match="application.recording.read"):
@@ -68,7 +68,7 @@ async def test_ac_fr5_2_401_session_mentions_session_token_var(
     """AC FR-5/2: 401 в session-режиме -> сообщение указывает на KTALK_SESSION_TOKEN."""
     httpx_mock.add_response(status_code=401)
 
-    from ktalk_mcp.client import KTalkAuthError, KTalkClient
+    from ktalk_cli.client import KTalkAuthError, KTalkClient
 
     async with KTalkClient(base_url=base_url, session_token="sess-1") as client:
         with pytest.raises(KTalkAuthError, match="KTALK_SESSION_TOKEN"):
@@ -82,7 +82,7 @@ async def test_ac_fr5_2b_403_session_generic_access_denied_no_scope_concept(
     диагнозом api-key (у сессии нет понятия scope)."""
     httpx_mock.add_response(status_code=403)
 
-    from ktalk_mcp.client import KTalkAuthError, KTalkClient, KTalkScopeError
+    from ktalk_cli.client import KTalkAuthError, KTalkClient, KTalkScopeError
 
     async with KTalkClient(base_url=base_url, session_token="sess-1") as client:
         with pytest.raises(KTalkAuthError) as exc_info:
@@ -99,7 +99,7 @@ async def test_ac_fr5_3_unparseable_error_body_still_readable_message(
     трейсбэка."""
     httpx_mock.add_response(status_code=401, content=b"<html>not json</html>")
 
-    from ktalk_mcp.client import KTalkAuthError, KTalkClient
+    from ktalk_cli.client import KTalkAuthError, KTalkClient
 
     async with KTalkClient(base_url=base_url, personal_api_key="pk-1") as client:
         with pytest.raises(KTalkAuthError) as exc_info:
@@ -117,7 +117,7 @@ async def test_diagnostics_403_empty_body_does_not_break_classification(
     ответа + known required_scope операции, не по телу."""
     httpx_mock.add_response(status_code=403, content=b"")
 
-    from ktalk_mcp.client import KTalkClient, KTalkScopeError
+    from ktalk_cli.client import KTalkClient, KTalkScopeError
 
     async with KTalkClient(base_url=base_url, personal_api_key="pk-1") as client:
         with pytest.raises(KTalkScopeError):
@@ -132,7 +132,7 @@ async def test_ac_fr11_1_auth_status_apikey_full_scopes(httpx_mock: HTTPXMock, b
     и expiredAt, не локальное предположение."""
     httpx_mock.add_response(json=_fixture_json("access-info-full.json"))
 
-    from ktalk_mcp.client import KTalkClient
+    from ktalk_cli.client import KTalkClient
 
     async with KTalkClient(base_url=base_url, personal_api_key="pk-1") as client:
         status = await client.get_auth_status()
@@ -151,7 +151,7 @@ async def test_auth_status_apikey_403_degrades_alive_true_scopes_none(
     applications.read» — alive=True, scopes=None, а не «ключ мёртв»."""
     httpx_mock.add_response(status_code=403, content=b"")
 
-    from ktalk_mcp.client import KTalkClient
+    from ktalk_cli.client import KTalkClient
 
     async with KTalkClient(base_url=base_url, personal_api_key="pk-1") as client:
         status = await client.get_auth_status()
@@ -165,7 +165,7 @@ async def test_auth_status_apikey_401_key_dead(httpx_mock: HTTPXMock, base_url):
     """Сценарий деградации ADR-003-spec: access-info -> 401 значит ключ мёртв."""
     httpx_mock.add_response(status_code=401)
 
-    from ktalk_mcp.client import KTalkClient
+    from ktalk_cli.client import KTalkClient
 
     async with KTalkClient(base_url=base_url, personal_api_key="pk-1") as client:
         status = await client.get_auth_status()
@@ -180,7 +180,7 @@ async def test_ac_fr11_2_auth_status_apikey_expired_key_still_returns_result(
     спека утверждает эту особенность текстом (Ф-9/RES-001, находка 8)."""
     httpx_mock.add_response(json=_fixture_json("access-info-expired.json"))
 
-    from ktalk_mcp.client import KTalkClient
+    from ktalk_cli.client import KTalkClient
 
     async with KTalkClient(base_url=base_url, personal_api_key="pk-1") as client:
         status = await client.get_auth_status()  # не должно поднимать исключение
@@ -197,7 +197,7 @@ async def test_ac_fr11_3_auth_status_session_mode_real_probe_not_fake(
     (list_recordings(top=1)), а не имитация без обращения к сети."""
     httpx_mock.add_response(json={"recordings": []})
 
-    from ktalk_mcp.client import KTalkClient
+    from ktalk_cli.client import KTalkClient
 
     async with KTalkClient(base_url=base_url, session_token="sess-1") as client:
         status = await client.get_auth_status()
@@ -217,7 +217,7 @@ async def test_auth_status_network_error_is_not_reported_as_dead_key(
     отказа, не должна маскироваться под alive=False («ключ мёртв»)."""
     httpx_mock.add_exception(httpx.ConnectTimeout("simulated network timeout"))
 
-    from ktalk_mcp.client import KTalkClient
+    from ktalk_cli.client import KTalkClient
 
     async with KTalkClient(base_url=base_url, personal_api_key="pk-1") as client:
         with pytest.raises(Exception):  # noqa: B017 — тип решает Dev, важно что это НЕ AuthStatus(alive=False)

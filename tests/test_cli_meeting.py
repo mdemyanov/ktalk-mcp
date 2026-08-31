@@ -1,5 +1,5 @@
 """AT-design: FR-13 CLI — `create-meeting-preview`/`create-meeting-confirm`
-(`ktalk_mcp.cli_meeting`, расширение `ktalk_mcp.cli`).
+(`ktalk_cli.cli_meeting`, расширение `ktalk_cli.cli`).
 
 Покрывает: булевы флаги НЕ `store_true` (отсутствие `--allow-anonymous` != `False`),
 явная пустая коллекция участников (`--no-required-attendees` != отсутствие флага,
@@ -12,7 +12,7 @@ ADR-009 §5), явное «без PIN» (`--no-pin-code`, ADR-009 §2), усло
 тест FR-19 — `test_fr19_auth_status.py`).
 
 Красные по замыслу: подкоманды `create-meeting-preview`/`create-meeting-confirm` и
-`ktalk_mcp.cli_meeting` не существуют.
+`ktalk_cli.cli_meeting` не существуют.
 
 Допущение для Dev (см. at-design-rooms-calendar.md «Допущения»): позитивный
 TTY-сценарий кодирует рабочую гипотезу — подтверждающий ввод "да" (регистронезависимо).
@@ -62,7 +62,7 @@ def _run(argv, monkeypatch=None, base_url="https://test.ktalk.ru", session_token
         monkeypatch.setenv("KTALK_BASE_URL", base_url)
         monkeypatch.setenv("KTALK_SESSION_TOKEN", session_token)
         monkeypatch.delenv("KTALK_PERSONAL_API_KEY", raising=False)
-    from ktalk_mcp.cli import main
+    from ktalk_cli.cli import main
 
     return main(["--db", BAD_DB, *argv])
 
@@ -71,7 +71,7 @@ def _run(argv, monkeypatch=None, base_url="https://test.ktalk.ru", session_token
 
 
 def test_tri_bool_accepts_true_false_case_insensitively():
-    from ktalk_mcp.cli_meeting_args import tri_bool as _tri_bool
+    from ktalk_cli.cli_meeting_args import tri_bool as _tri_bool
 
     assert _tri_bool("true") is True
     assert _tri_bool("TRUE") is True
@@ -82,7 +82,7 @@ def test_tri_bool_accepts_true_false_case_insensitively():
 def test_tri_bool_rejects_non_true_false_tokens():
     import argparse
 
-    from ktalk_mcp.cli_meeting_args import tri_bool as _tri_bool
+    from ktalk_cli.cli_meeting_args import tri_bool as _tri_bool
 
     with pytest.raises(argparse.ArgumentTypeError):
         _tri_bool("yes")
@@ -94,7 +94,7 @@ def test_tri_bool_rejects_non_true_false_tokens():
 
 
 def test_print_error_without_response_body_prints_only_message(capsys):
-    from ktalk_mcp.cli_meeting_args import print_error as _print_error
+    from ktalk_cli.cli_meeting_args import print_error as _print_error
 
     _print_error("Ошибка X")
 
@@ -104,7 +104,7 @@ def test_print_error_without_response_body_prints_only_message(capsys):
 
 
 def test_print_error_with_response_body_appends_it_to_message(capsys):
-    from ktalk_mcp.cli_meeting_args import print_error as _print_error
+    from ktalk_cli.cli_meeting_args import print_error as _print_error
 
     _print_error("Ошибка X", "тело ответа сервера тут")
 
@@ -119,7 +119,7 @@ def test_print_error_masks_secret_inside_response_body(monkeypatch, capsys):
     тексте сообщения."""
     monkeypatch.setenv("KTALK_SESSION_TOKEN", "super-secret-session-value")
     monkeypatch.delenv("KTALK_PERSONAL_API_KEY", raising=False)
-    from ktalk_mcp.cli_meeting_args import print_error as _print_error
+    from ktalk_cli.cli_meeting_args import print_error as _print_error
 
     _print_error("Ошибка сети", "лог сервера содержит super-secret-session-value внутри")
 
@@ -131,7 +131,7 @@ def test_print_error_masks_secret_inside_response_body(monkeypatch, capsys):
 
 
 def test_build_parser_registers_both_create_meeting_subcommands():
-    from ktalk_mcp.cli import build_parser
+    from ktalk_cli.cli import build_parser
 
     parser = build_parser()
     args = parser.parse_args(["create-meeting-preview"])

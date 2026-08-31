@@ -26,7 +26,7 @@ async def test_ac_fr9_3_session_mode_archive_explicit_message_not_raw_401(
     """AC FR-9/3: session-режим (ключ не задан) -> пользователь получает явное сообщение
     о том, что архив доступен только в api-key-режиме, а не голый 401 — и это решается
     до сетевого вызова (httpx-мок не должен получить ни одного запроса)."""
-    from ktalk_mcp.client import KTalkClient, OperationNotAvailableError
+    from ktalk_cli.client import KTalkClient, OperationNotAvailableError
 
     async with KTalkClient(base_url=base_url, session_token="sess-1") as client:
         with pytest.raises(OperationNotAvailableError, match="архив"):

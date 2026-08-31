@@ -1,4 +1,4 @@
-"""AT-design: FR-17 — чтение комнаты (`ktalk_mcp.rooms`, `ktalk_mcp.tools_rooms`).
+"""AT-design: FR-17 — чтение комнаты (`ktalk_cli.rooms`, `ktalk_cli.tools_rooms`).
 
 Покрывает FR-17 AC-1 (маппер 18 полей — регрессионный guard на форму, официальная
 проверка AC-1 сама по себе ручная, см. at-design.md), AC-3 (api-key-режим без
@@ -7,7 +7,7 @@
 её до тестируемого решения (rooms-calendar-spec §4.2): любой не-2xx с рабочим
 контрольным вызовом -> ContourDriftError, не «комната не найдена» — см. тест ниже.
 
-Красные по замыслу: `ktalk_mcp.rooms`/`ktalk_mcp.tools_rooms` не существуют.
+Красные по замыслу: `ktalk_cli.rooms`/`ktalk_cli.tools_rooms` не существуют.
 """
 
 from __future__ import annotations
@@ -63,7 +63,7 @@ ROOM_FIELD_NAMES = (
 
 
 def test_room_fields_constant_has_18_documented_fields():
-    from ktalk_mcp.rooms import ROOM_FIELDS
+    from ktalk_cli.rooms import ROOM_FIELDS
 
     assert len(ROOM_FIELDS) == 18
     assert set(ROOM_FIELDS) == set(ROOM_FIELD_NAMES)
@@ -72,7 +72,7 @@ def test_room_fields_constant_has_18_documented_fields():
 def test_map_room_extracts_all_18_fields_from_live_probe_fixture():
     """AC FR-17/1 (форма): маппер отдаёт объект как минимум с 18 задокументированными
     живым зондом полями."""
-    from ktalk_mcp.rooms import map_room
+    from ktalk_cli.rooms import map_room
 
     raw = _fixture_json("room-detail-session.json")
     mapped = map_room(raw)
@@ -86,7 +86,7 @@ def test_map_room_extracts_all_18_fields_from_live_probe_fixture():
 def test_map_room_tolerates_missing_non_anchor_fields():
     """Поле вне якоря контракта, отсутствующее в ответе, не должно ронять маппер —
     отдаётся как None, а не KeyError."""
-    from ktalk_mcp.rooms import map_room
+    from ktalk_cli.rooms import map_room
 
     raw = {"roomName": "test-room-alpha"}
     mapped = map_room(raw)
@@ -98,8 +98,8 @@ def test_map_room_tolerates_missing_non_anchor_fields():
 def test_map_room_missing_anchor_field_raises_contour_drift():
     """Якорь контракта (`roomName`) отсутствует на коде 200 -> ContourDriftError,
     не KeyError/None молча (rooms-calendar-spec §4.1)."""
-    from ktalk_mcp.contour_diagnostics import ContourDriftError
-    from ktalk_mcp.rooms import map_room
+    from ktalk_cli.contour_diagnostics import ContourDriftError
+    from ktalk_cli.rooms import map_room
 
     with pytest.raises(ContourDriftError):
         map_room({"sessionHalls": []})
@@ -114,8 +114,8 @@ async def test_ac_fr17_3_get_room_apikey_mode_refuses_before_network_call(
     Code review (epic-capability-pairing, Р1/Р2): `get_room` подтверждён только под
     session (`endpoints.py`) — сообщение обязано советовать включить именно сессию,
     не ключ, которым пользователь уже пользуется."""
-    from ktalk_mcp.client import KTalkClient, OperationNotAvailableError
-    from ktalk_mcp.rooms import get_room
+    from ktalk_cli.client import KTalkClient, OperationNotAvailableError
+    from ktalk_cli.rooms import get_room
 
     async with KTalkClient(base_url=base_url, personal_api_key=personal_api_key) as client:
         with pytest.raises(OperationNotAvailableError, match="режиме сессии"):
@@ -128,8 +128,8 @@ async def test_ac_fr17_1_get_room_session_mode_happy_path(
     httpx_mock: HTTPXMock, base_url, session_token
 ):
     """Session-режим, комната существует -> объект с полным составом полей."""
-    from ktalk_mcp.client import KTalkClient
-    from ktalk_mcp.rooms import get_room
+    from ktalk_cli.client import KTalkClient
+    from ktalk_cli.rooms import get_room
 
     httpx_mock.add_response(json=_fixture_json("room-detail-session.json"))
 
@@ -148,9 +148,9 @@ async def test_get_room_any_non_2xx_with_working_control_raises_contour_drift_no
     ЛЮБОЙ отказ (в т.ч. гипотетический 404 для несуществующей комнаты), при рабочем
     контрольном вызове, даёт ContourDriftError, не тихую классификацию "комната не
     найдена" (которая замаскировала бы реальный дрейф контура тем же кодом)."""
-    from ktalk_mcp.client import KTalkClient
-    from ktalk_mcp.contour_diagnostics import ContourDriftError
-    from ktalk_mcp.rooms import get_room
+    from ktalk_cli.client import KTalkClient
+    from ktalk_cli.contour_diagnostics import ContourDriftError
+    from ktalk_cli.rooms import get_room
 
     httpx_mock.add_response(status_code=404)  # недокументированный путь: гипотетический 404
     httpx_mock.add_response(json={"recordings": []})  # control: list_recordings(top=1) -> 200
@@ -164,7 +164,7 @@ def test_get_room_docstring_carries_adr006_side_effect_warning():
     """ADR-006 §4.2 / DEV-003: докстрайн несёт безусловное предупреждение о
     побочном эффекте — вызов с ранее не читанным именем создаёт комнату,
     отменить нельзя, инструмент не годится для проверки занятости имени."""
-    from ktalk_mcp.rooms import get_room
+    from ktalk_cli.rooms import get_room
 
     doc = get_room.__doc__ or ""
 
@@ -174,30 +174,14 @@ def test_get_room_docstring_carries_adr006_side_effect_warning():
     assert "занятост" in doc  # "занятости/свободности имени"
 
 
-async def test_ktalk_get_room_tool_description_carries_adr006_side_effect_warning():
-    """ADR-006 §4.3 / DEV-003: описание MCP-инструмента (видимое вызывающему
-    агенту) несёт то же предупреждение — важнее докстрайна, т.к. это видит
-    вызывающий."""
-    from ktalk_mcp.server import mcp
-
-    tools = await mcp.list_tools()
-    tools_by_name = {t.name: t for t in tools}
-    description = tools_by_name["ktalk_get_room"].description or ""
-
-    assert "ADR-006" in description
-    assert "side effect" in description.lower() or "creates" in description.lower()
-    assert "cannot" in description.lower() or "irreversib" in description.lower()
-    assert "occupan" in description.lower() or "availab" in description.lower()
-
-
 async def test_get_room_200_on_never_seen_name_is_not_treated_as_error(
     httpx_mock: HTTPXMock, base_url, session_token
 ):
     """Контракт с QA-author (rooms-calendar-spec §«Контракт с QA-author»): 200
     на ранее не встречавшееся имя — не ошибка/«не найдено», отдаётся как
     обычный результат (живое поведение ADR-006, Ф-45/Ф-49)."""
-    from ktalk_mcp.client import KTalkClient
-    from ktalk_mcp.rooms import get_room
+    from ktalk_cli.client import KTalkClient
+    from ktalk_cli.rooms import get_room
 
     fresh_name = "probe-fresh-never-seen-in-this-contour"
     fixture = _fixture_json("room-detail-session.json")
@@ -208,16 +192,3 @@ async def test_get_room_200_on_never_seen_name_is_not_treated_as_error(
         room = await get_room(client, fresh_name)
 
     assert room["roomName"] == fresh_name
-
-
-async def test_ktalk_get_room_mcp_tool_registered_with_room_name_required():
-    """`ktalk_get_room` — новый MCP-инструмент (NFR-6: аддитивен, не заменяет
-    существующие)."""
-    from ktalk_mcp.server import mcp
-
-    tools = await mcp.list_tools()
-    tools_by_name = {t.name: t for t in tools}
-
-    assert "ktalk_get_room" in tools_by_name
-    schema = tools_by_name["ktalk_get_room"].parameters
-    assert set(schema.get("required", [])) == {"room_name"}

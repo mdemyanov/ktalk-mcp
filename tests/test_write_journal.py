@@ -1,6 +1,6 @@
 """QA-007 (волна 6): журнал пишущих операций — ADR-016 §4/§5, NFR-23 п.6.
 
-Красные по замыслу до DEV-012: модуля `ktalk_mcp.write_journal` не существует.
+Красные по замыслу до DEV-012: модуля `ktalk_cli.write_journal` не существует.
 """
 
 from __future__ import annotations
@@ -40,13 +40,13 @@ def _run(argv, monkeypatch=None):
         monkeypatch.setenv("KTALK_BASE_URL", "https://test.ktalk.ru")
         monkeypatch.setenv("KTALK_SESSION_TOKEN", "super-secret-session-value")
         monkeypatch.delenv("KTALK_PERSONAL_API_KEY", raising=False)
-    from ktalk_mcp.cli import main
+    from ktalk_cli.cli import main
 
     return main(["--db", BAD_DB, *argv])
 
 
 def _confirm_once(monkeypatch, capsys):
-    from ktalk_mcp import write_sanction
+    from ktalk_cli import write_sanction
 
     write_sanction.grant("create_meeting", hours=8, operations=3)
     assert _run(["create-meeting-preview", *_MEETING_ARGS, "--json"], monkeypatch) == 0
@@ -55,7 +55,7 @@ def _confirm_once(monkeypatch, capsys):
 
 
 def _events():
-    from ktalk_mcp import write_journal
+    from ktalk_cli import write_journal
 
     return [
         json.loads(line)
@@ -114,7 +114,7 @@ def test_journal_does_not_contain_secret_values(httpx_mock: HTTPXMock, monkeypat
 
     assert _confirm_once(monkeypatch, capsys) == 0
 
-    from ktalk_mcp import write_journal
+    from ktalk_cli import write_journal
 
     assert "super-secret-session-value" not in write_journal.journal_path().read_text(
         encoding="utf-8"
@@ -126,14 +126,14 @@ def test_journal_file_permissions_are_0600(httpx_mock: HTTPXMock, monkeypatch, c
 
     assert _confirm_once(monkeypatch, capsys) == 0
 
-    from ktalk_mcp import write_journal
+    from ktalk_cli import write_journal
 
     assert write_journal.journal_path().stat().st_mode & 0o777 == 0o600
 
 
 def test_unwritable_journal_blocks_the_network_call(httpx_mock: HTTPXMock, monkeypatch, capsys):
     """Прослеживаемость не опциональна: не записан `attempt` — сетевого вызова нет."""
-    from ktalk_mcp import write_journal
+    from ktalk_cli import write_journal
 
     path = write_journal.journal_path()
     path.parent.mkdir(parents=True, exist_ok=True)

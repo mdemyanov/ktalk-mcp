@@ -1,7 +1,8 @@
-# ktalk-mcp
+# ktalk-cli
 
-Пакет с двумя командами: MCP-сервер для доступа к записям Контур.Толк (KTalk)
-и CLI `ktalk` — операционный реестр записей на SQLite.
+CLI `ktalk` для доступа к записям Контур.Толк (KTalk) и операционного реестра
+записей на SQLite. MCP-слой снят ADR-022 целиком (был во фризе с ADR-015) —
+единственная поверхность пакета сегодня — CLI.
 
 ## Стиль (безусловное правило)
 Писать сухо и сжато — в ответах, коммитах, статьях `content/`, докстрингах.
@@ -9,15 +10,15 @@
 сказать. Правило действует всегда и приоритетнее привычки к развёрнутости.
 
 ## Entry points
-- `ktalk-mcp = ktalk_mcp.server:main` — MCP-сервер (контент: транскрипты, саммари)
-- `ktalk = ktalk_mcp.cli:main` — CLI реестра (механика: sync/дедуп/статусы/экспорт)
+- `ktalk = ktalk_cli.cli:main` — единственная точка входа (реестр + чтение/запись контура)
 
 ## Commands
 - `bash scripts/check.sh --fast` — гейты контура (тот же прогон, что на pre-commit)
 
 ## Architecture
-Один пакет `ktalk_mcp`, общие `client.py`/`config.py` для MCP и CLI.
-- Мутирующего MCP-инструмента нет: планирование отдаёт только предпросмотр (ADR-005)
+Один пакет `ktalk_cli`, единая точка входа CLI.
+- Планирование отдаёт только предпросмотр (`create-meeting-preview`), создание —
+  отдельная подтверждаемая команда (ADR-005/ADR-016)
 - Пути API живут в таблице `OPERATION_PROFILES` (`auth.py`), не хардкодом в методах —
   набор путей зависит от режима авторизации
 - `calendar_reader.py`: окно календаря режется клиентом (сервер лимитирует 7 днями,
@@ -27,12 +28,11 @@
 
 ## API Reference
 Контракты, режимы авторизации и эмпирика поведения API (спеке верить нельзя) —
-в `src/ktalk_mcp/CLAUDE.md`, грузится при работе с файлами под `src/`.
+в `src/ktalk_cli/CLAUDE.md`, грузится при работе с файлами под `src/`.
 
 ## Conventions
-- Async everywhere (httpx, fastmcp)
-- Каждый MCP tool принимает параметр `format`: "raw" (JSON as-is) или "markdown" (human-readable)
-- `ktalk_get_transcript` поддерживает чанкинг: `chunk` (0=авто, 1+=номер чанка), `chunk_size` (символов, по умолчанию 30000)
+- Async everywhere (httpx) — `fastmcp` снят ADR-022 вместе с MCP-слоем
+- `ktalk get-transcript` поддерживает чанкинг: `--chunk` (0=авто, 1+=номер чанка), `--chunk-size` (символов, по умолчанию 30000)
 - Ошибки API → человекочитаемые сообщения на русском
 - Имена пользователей: `surname firstname`, fallback: `login` → `anonymousName` → "Неизвестный"
 - Длительность: секунды → "X ч Y мин" или "X мин"
@@ -86,7 +86,7 @@ openspec/specs/<capability>/spec.md` — путь к машинно-провер
 `core.hooksPath=.githooks` → `scripts/check.sh --fast`. Требует `uv` в PATH.
 - Пороги — в `.nauta-gates.yaml`, откалиброваны замером этого репозитория;
   обоснование и правило пересмотра: `content/40-architecture/ADR-001-nauta-contour-spec.md`.
-- `src/ktalk_mcp/registry.py` заморожен грандфазером на 562 строках: рост даёт
+- `src/ktalk_cli/registry.py` заморожен грандфазером на 562 строках: рост даёт
   error. Снимается расщеплением класса `Registry`, не поднятием потолка.
 - `scripts/` и `.githooks/` — payload плагина, приезжает через `/nauta:sync-scripts`
   и отслеживается по sha256 в `.nauta-scripts-basis.yaml`. Правка руками превращает

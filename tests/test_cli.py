@@ -6,7 +6,7 @@ from pathlib import Path
 
 
 def _seed(db: Path):
-    from ktalk_mcp.registry import Registry
+    from ktalk_cli.registry import Registry
 
     with Registry(db) as reg:
         reg.upsert_recording(
@@ -23,7 +23,7 @@ def _seed(db: Path):
 
 
 def test_list_json(tmp_path, capsys):
-    from ktalk_mcp.cli import main
+    from ktalk_cli.cli import main
 
     db = tmp_path / "r.db"
     _seed(db)
@@ -35,7 +35,7 @@ def test_list_json(tmp_path, capsys):
 
 
 def test_list_status_filter_json(tmp_path, capsys):
-    from ktalk_mcp.cli import main
+    from ktalk_cli.cli import main
 
     db = tmp_path / "r.db"
     _seed(db)
@@ -46,7 +46,7 @@ def test_list_status_filter_json(tmp_path, capsys):
 
 
 def test_show_json_includes_participants(tmp_path, capsys):
-    from ktalk_mcp.cli import main
+    from ktalk_cli.cli import main
 
     db = tmp_path / "r.db"
     _seed(db)
@@ -58,7 +58,7 @@ def test_show_json_includes_participants(tmp_path, capsys):
 
 
 def test_show_missing_returns_error(tmp_path, capsys):
-    from ktalk_mcp.cli import main
+    from ktalk_cli.cli import main
 
     db = tmp_path / "r.db"
     _seed(db)
@@ -68,7 +68,7 @@ def test_show_missing_returns_error(tmp_path, capsys):
 
 
 def test_list_text_output(tmp_path, capsys):
-    from ktalk_mcp.cli import main
+    from ktalk_cli.cli import main
 
     db = tmp_path / "r.db"
     _seed(db)
@@ -79,8 +79,8 @@ def test_list_text_output(tmp_path, capsys):
 
 
 def test_mark_done_updates_db(tmp_path):
-    from ktalk_mcp.cli import main
-    from ktalk_mcp.registry import Registry
+    from ktalk_cli.cli import main
+    from ktalk_cli.registry import Registry
 
     db = tmp_path / "r.db"
     _seed(db)
@@ -97,8 +97,8 @@ def test_mark_done_updates_db(tmp_path):
 
 
 def test_mark_processing_then_partial(tmp_path):
-    from ktalk_mcp.cli import main
-    from ktalk_mcp.registry import Registry
+    from ktalk_cli.cli import main
+    from ktalk_cli.registry import Registry
 
     db = tmp_path / "r.db"
     _seed(db)
@@ -109,7 +109,7 @@ def test_mark_processing_then_partial(tmp_path):
 
 
 def test_mark_done_missing_id_errors(tmp_path, capsys):
-    from ktalk_mcp.cli import main
+    from ktalk_cli.cli import main
 
     db = tmp_path / "r.db"
     _seed(db)
@@ -119,8 +119,8 @@ def test_mark_done_missing_id_errors(tmp_path, capsys):
 
 
 def test_set_vault_id(tmp_path):
-    from ktalk_mcp.cli import main
-    from ktalk_mcp.registry import Registry
+    from ktalk_cli.cli import main
+    from ktalk_cli.registry import Registry
 
     db = tmp_path / "r.db"
     _seed(db)
@@ -131,7 +131,7 @@ def test_set_vault_id(tmp_path):
 
 
 def test_dashboard_json(tmp_path, capsys):
-    from ktalk_mcp.cli import main
+    from ktalk_cli.cli import main
 
     db = tmp_path / "r.db"
     _seed(db)
@@ -144,7 +144,7 @@ def test_dashboard_json(tmp_path, capsys):
 
 
 def test_export_writes_mirror(tmp_path, capsys):
-    from ktalk_mcp.cli import main
+    from ktalk_cli.cli import main
 
     db = tmp_path / "r.db"
     _seed(db)
@@ -157,7 +157,7 @@ def test_export_writes_mirror(tmp_path, capsys):
 
 
 def test_migrate_dry_run_json(tmp_path, capsys):
-    from ktalk_mcp.cli import main
+    from ktalk_cli.cli import main
 
     vault = tmp_path / "vault"
     tdir = vault / "95_TRANSCRIPTS"
@@ -171,7 +171,7 @@ def test_migrate_dry_run_json(tmp_path, capsys):
     assert rc == 0
     out = json.loads(capsys.readouterr().out)
     assert out["recordings"] == 2
-    from ktalk_mcp.registry import Registry
+    from ktalk_cli.registry import Registry
 
     with Registry(db) as reg:
         assert reg.list_recordings() == []  # dry-run wrote nothing
@@ -194,7 +194,7 @@ def test_sync_inserts_dedups_and_expires(tmp_path, capsys, monkeypatch, httpx_mo
     long_ago = (today - timedelta(days=200)).isoformat()
 
     # Pre-seed an old 'new' recording that must expire, plus one that will be re-synced.
-    from ktalk_mcp.registry import Registry
+    from ktalk_cli.registry import Registry
 
     with Registry(db) as reg:
         reg.upsert_recording(
@@ -226,7 +226,7 @@ def test_sync_inserts_dedups_and_expires(tmp_path, capsys, monkeypatch, httpx_mo
     # страница поэтому не последняя сама по себе — нужна завершающая пустая.
     httpx_mock.add_response(json={"recordings": []})
 
-    from ktalk_mcp.cli import main
+    from ktalk_cli.cli import main
 
     rc = main(["--db", str(db), "sync", "--days", "7", "--json"])
     assert rc == 0
@@ -244,13 +244,23 @@ def test_sync_inserts_dedups_and_expires(tmp_path, capsys, monkeypatch, httpx_mo
 
 
 def test_version_flag(capsys):
-    from ktalk_mcp.cli import main
+    """Структура вывода `--version` — "<имя> <версия>", версия в форме X.Y.Z.
+
+    Само имя НЕ снимается как хардкод-литерал здесь (ADR-022 §7/§8, находка
+    SA-001): предыдущая версия этого теста фиксировала `out.startswith(
+    "ktalk-mcp ")`, и это само по себе было тем классом бага, который ADR-022
+    закрывает — снимок пережил бы следующее переименование молча. Имя проверяется
+    динамически, тем же приёмом, что версия уже использует ниже
+    (`test_name_matches_pyproject`), плюс отдельной мутацией метаданных в
+    `tests/test_adr022_ktalk_cli_rename.py`."""
+    from ktalk_cli.cli import main
 
     code = main(["--version"])
     out = capsys.readouterr().out
     assert code == 0
-    assert out.startswith("ktalk-mcp ")
-    assert out.split()[1].count(".") == 2
+    name, _, version = out.strip().partition(" ")
+    assert name  # печатаемая идентичность непуста
+    assert version.count(".") == 2
 
 
 def test_version_matches_pyproject(capsys):
@@ -261,7 +271,7 @@ def test_version_matches_pyproject(capsys):
     import tomllib
     from pathlib import Path
 
-    from ktalk_mcp.cli import main
+    from ktalk_cli.cli import main
 
     pyproject = Path(__file__).resolve().parent.parent / "pyproject.toml"
     declared = tomllib.loads(pyproject.read_text(encoding="utf-8"))["project"]["version"]
@@ -271,3 +281,27 @@ def test_version_matches_pyproject(capsys):
 
     assert code == 0
     assert printed == declared, f"ktalk --version={printed}, pyproject={declared}"
+
+
+def test_name_matches_pyproject(capsys):
+    """Симметрично `test_version_matches_pyproject` (ADR-022 §7/§8, находка
+    SA-001): печатаемое имя дистрибутива — не хардкод-снимок, а прямое
+    отражение `pyproject.toml[project].name`. Расхождение здесь — тот же
+    класс бага, что версия поймала в 0.8.0, впервые получающий guard для
+    имени."""
+    import tomllib
+    from pathlib import Path
+
+    from ktalk_cli.cli import main
+
+    pyproject = Path(__file__).resolve().parent.parent / "pyproject.toml"
+    declared_name = tomllib.loads(pyproject.read_text(encoding="utf-8"))["project"]["name"]
+
+    code = main(["--version"])
+    printed_name = capsys.readouterr().out.split()[0]
+
+    assert code == 0
+    assert printed_name == declared_name, (
+        f"ktalk --version печатает имя {printed_name!r}, pyproject.toml называет "
+        f"{declared_name!r}"
+    )

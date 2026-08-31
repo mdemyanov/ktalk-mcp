@@ -16,7 +16,7 @@ async def test_list_recordings(httpx_mock: HTTPXMock, base_url, session_token):
     response_data = {"recordings": []}
     httpx_mock.add_response(json=response_data)
 
-    from ktalk_mcp.client import KTalkClient
+    from ktalk_cli.client import KTalkClient
 
     async with KTalkClient(base_url=base_url, session_token=session_token) as client:
         result = await client.list_recordings(top=30, order_mode="byTimeNewFirst")
@@ -31,7 +31,7 @@ async def test_list_recordings_with_filters(httpx_mock: HTTPXMock, base_url, ses
     response_data = {"recordings": []}
     httpx_mock.add_response(json=response_data)
 
-    from ktalk_mcp.client import KTalkClient
+    from ktalk_cli.client import KTalkClient
 
     async with KTalkClient(base_url=base_url, session_token=session_token) as client:
         result = await client.list_recordings(
@@ -51,7 +51,7 @@ async def test_get_recording(httpx_mock: HTTPXMock, base_url, session_token):
     response_data = {"id": "rec-123", "title": "Test Recording"}
     httpx_mock.add_response(json=response_data)
 
-    from ktalk_mcp.client import KTalkClient
+    from ktalk_cli.client import KTalkClient
 
     async with KTalkClient(base_url=base_url, session_token=session_token) as client:
         result = await client.get_recording("rec-123")
@@ -65,7 +65,7 @@ async def test_get_transcript(httpx_mock: HTTPXMock, base_url, session_token):
     response_data = {"status": "complete", "tracks": []}
     httpx_mock.add_response(json=response_data)
 
-    from ktalk_mcp.client import KTalkClient
+    from ktalk_cli.client import KTalkClient
 
     async with KTalkClient(base_url=base_url, session_token=session_token) as client:
         result = await client.get_transcript("rec-123")
@@ -83,7 +83,7 @@ async def test_get_summary(httpx_mock: HTTPXMock, base_url, session_token):
     }
     httpx_mock.add_response(json=response_data)
 
-    from ktalk_mcp.client import KTalkClient
+    from ktalk_cli.client import KTalkClient
 
     async with KTalkClient(base_url=base_url, session_token=session_token) as client:
         result = await client.get_summary("rec-123")
@@ -97,7 +97,7 @@ async def test_get_summary_by_type(httpx_mock: HTTPXMock, base_url, session_toke
     response_data = {"status": "success", "chunks": []}
     httpx_mock.add_response(json=response_data)
 
-    from ktalk_mcp.client import KTalkClient
+    from ktalk_cli.client import KTalkClient
 
     async with KTalkClient(base_url=base_url, session_token=session_token) as client:
         result = await client.get_summary_by_type("rec-123", "shortSummary")
@@ -110,7 +110,7 @@ async def test_get_summary_by_type(httpx_mock: HTTPXMock, base_url, session_toke
 async def test_error_401(httpx_mock: HTTPXMock, base_url, session_token):
     httpx_mock.add_response(status_code=401, text="Unauthorized")
 
-    from ktalk_mcp.client import KTalkAuthError, KTalkClient
+    from ktalk_cli.client import KTalkAuthError, KTalkClient
 
     async with KTalkClient(base_url=base_url, session_token=session_token) as client:
         with pytest.raises(KTalkAuthError, match="Токен сессии истёк"):
@@ -125,7 +125,7 @@ async def test_error_403(httpx_mock: HTTPXMock, base_url, session_token):
     """
     httpx_mock.add_response(status_code=403, text="Forbidden")
 
-    from ktalk_mcp.client import KTalkAuthError, KTalkClient
+    from ktalk_cli.client import KTalkAuthError, KTalkClient
 
     async with KTalkClient(base_url=base_url, session_token=session_token) as client:
         with pytest.raises(KTalkAuthError, match="Доступ запрещён") as exc:
@@ -136,7 +136,7 @@ async def test_error_403(httpx_mock: HTTPXMock, base_url, session_token):
 async def test_error_404(httpx_mock: HTTPXMock, base_url, session_token):
     httpx_mock.add_response(status_code=404, text="Not Found")
 
-    from ktalk_mcp.client import KTalkClient, KTalkNotFoundError
+    from ktalk_cli.client import KTalkClient, KTalkNotFoundError
 
     async with KTalkClient(base_url=base_url, session_token=session_token) as client:
         with pytest.raises(KTalkNotFoundError, match="не найден"):
@@ -154,7 +154,7 @@ async def test_get_recording_quotes_path_traversal_in_key(
     реально уходит на сервер (в отличие от декодирующего удобного `.path`)."""
     httpx_mock.add_response(json={"id": "n/a"})
 
-    from ktalk_mcp.client import KTalkClient
+    from ktalk_cli.client import KTalkClient
 
     async with KTalkClient(base_url=base_url, session_token=session_token) as client:
         await client.get_recording("../admin")
@@ -170,7 +170,7 @@ async def test_get_chat_messages_quotes_conference_key(
     без квотирования `conference_key`."""
     httpx_mock.add_response(json={"messages": []})
 
-    from ktalk_mcp.client import KTalkClient
+    from ktalk_cli.client import KTalkClient
 
     async with KTalkClient(base_url=base_url, session_token=session_token) as client:
         await client.get_chat_messages(conference_key="../secret", channel="general")
