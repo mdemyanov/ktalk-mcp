@@ -26,3 +26,4 @@ docs/*.har
 .beads-credential-key
 .beads/proxieddb/
 *.gate.lock*
+packaging/*/dist/
