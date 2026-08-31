@@ -15,6 +15,8 @@ properties:
 (`docs/postanovka-wave-3-plugin.md`), [RES-001 — инвентаризация контура и конвенции хранилища
 (включая RES-002 — механика плагина)](../10-domain/research/ktalk-plugin-extraction.md).
 
+**Capability:** `openspec/specs/host-project-config-discovery/spec.md`, `openspec/specs/centralized-machine-storage/spec.md`
+
 ## JTBD
 
 Когда я (владелец) переключаюсь между проектами и хочу использовать контур ktalk (реестр записей,
