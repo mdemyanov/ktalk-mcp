@@ -1,4 +1,4 @@
-"""AT-design: FR-18 — чтение календаря (`ktalk_mcp.calendar_reader`, расширение
+"""AT-design: FR-18 — чтение календаря (`ktalk_cli.calendar_reader`, расширение
 `tools_meetings.py`).
 
 Покрывает все AC FR-18 (нет заблокированных): окно <=7 дней (AC-1), окно >7 дней без
@@ -8,7 +8,12 @@
 (AC-7). Плюс: `split_window` boundary cases и решающая таблица `_fetch_segment`
 (rooms-calendar-spec §5.3/§5.5), NFR-7 (fail-closed api-key).
 
-Красные по замыслу: `ktalk_mcp.calendar_reader` не существует.
+Красные по замыслу: `ktalk_cli.calendar_reader` не существует.
+
+ADR-022 (снятие MCP-слоя): MCP-инструментные проверки AC-3/AC-6 (`ktalk_list_calendar` как
+инструмент) удалены вместе с `server.py` — сам факт (`start` обязателен, `query` не в схеме)
+остаётся верным на уровне чистых функций `calendar_reader`/`client`, но больше не проверяется
+здесь отдельным тестом (нет MCP-инструмента, для которого проверять регистрацию/схему).
 """
 
 from __future__ import annotations
@@ -53,14 +58,14 @@ def _item(item_id: str, start: str = "2026-08-15T10:00:00+03:00") -> dict:
 
 
 def test_split_window_exactly_7_days_gives_one_segment():
-    from ktalk_mcp.calendar_reader import split_window
+    from ktalk_cli.calendar_reader import split_window
 
     segments = split_window(date(2026, 8, 1), date(2026, 8, 7))
     assert segments == [(date(2026, 8, 1), date(2026, 8, 7))]
 
 
 def test_split_window_8_days_gives_two_segments_7_plus_1():
-    from ktalk_mcp.calendar_reader import split_window
+    from ktalk_cli.calendar_reader import split_window
 
     segments = split_window(date(2026, 8, 1), date(2026, 8, 8))
     assert len(segments) == 2
@@ -69,7 +74,7 @@ def test_split_window_8_days_gives_two_segments_7_plus_1():
 
 
 def test_split_window_14_days_gives_two_segments_of_7():
-    from ktalk_mcp.calendar_reader import split_window
+    from ktalk_cli.calendar_reader import split_window
 
     segments = split_window(date(2026, 8, 1), date(2026, 8, 14))
     assert len(segments) == 2
@@ -78,14 +83,14 @@ def test_split_window_14_days_gives_two_segments_of_7():
 
 
 def test_split_window_single_day_start_equals_end():
-    from ktalk_mcp.calendar_reader import split_window
+    from ktalk_cli.calendar_reader import split_window
 
     segments = split_window(date(2026, 8, 1), date(2026, 8, 1))
     assert segments == [(date(2026, 8, 1), date(2026, 8, 1))]
 
 
 def test_split_window_segments_are_contiguous_no_gap_no_overlap():
-    from ktalk_mcp.calendar_reader import split_window
+    from ktalk_cli.calendar_reader import split_window
 
     segments = split_window(date(2026, 8, 1), date(2026, 8, 20))
     for (_, seg_end), (next_start, _) in zip(segments, segments[1:]):
@@ -96,7 +101,7 @@ def test_split_window_segments_are_contiguous_no_gap_no_overlap():
 
 
 def test_calendar_item_fields_constant_has_20_documented_fields():
-    from ktalk_mcp.calendar_reader import CALENDAR_ITEM_FIELDS
+    from ktalk_cli.calendar_reader import CALENDAR_ITEM_FIELDS
 
     assert len(CALENDAR_ITEM_FIELDS) == 20
 
@@ -104,7 +109,7 @@ def test_calendar_item_fields_constant_has_20_documented_fields():
 def test_map_calendar_item_preserves_undocumented_but_contractual_fields():
     """`meetId`/`urlParams` — вне документированной EmailCalendarItem, но часть
     контракта этой волны (ADR-004 п.3) — не отбрасываются."""
-    from ktalk_mcp.calendar_reader import map_calendar_item
+    from ktalk_cli.calendar_reader import map_calendar_item
 
     raw = _fixture_json("calendar-item-session.json")
     mapped = map_calendar_item(raw)
@@ -116,7 +121,7 @@ def test_map_calendar_item_preserves_undocumented_but_contractual_fields():
 def test_map_calendar_item_tolerates_absent_documented_but_never_seen_fields():
     """Элемент без `recurrence`/`isCancelled`/`isAllDayEvent`/`externalMeeting`/
     `isPrivate`/`onlineUsersCount` — валиден, не ошибка маппера."""
-    from ktalk_mcp.calendar_reader import map_calendar_item
+    from ktalk_cli.calendar_reader import map_calendar_item
 
     raw = _fixture_json("calendar-item-session.json")
     for absent in (
@@ -132,8 +137,8 @@ def test_map_calendar_item_tolerates_absent_documented_but_never_seen_fields():
 
 
 def test_map_calendar_item_missing_anchor_raises_contour_drift():
-    from ktalk_mcp.calendar_reader import map_calendar_item
-    from ktalk_mcp.contour_diagnostics import ContourDriftError
+    from ktalk_cli.calendar_reader import map_calendar_item
+    from ktalk_cli.contour_diagnostics import ContourDriftError
 
     with pytest.raises(ContourDriftError):
         map_calendar_item({"start": "2026-08-15T10:00:00+03:00"})  # roomName отсутствует
@@ -145,8 +150,8 @@ def test_map_calendar_item_missing_anchor_raises_contour_drift():
 async def test_ac_fr18_1_window_within_7_days_returns_all_items_single_segment(
     httpx_mock: HTTPXMock, base_url, session_token
 ):
-    from ktalk_mcp.calendar_reader import get_calendar_window
-    from ktalk_mcp.client import KTalkClient
+    from ktalk_cli.calendar_reader import get_calendar_window
+    from ktalk_cli.client import KTalkClient
 
     httpx_mock.add_response(json={"items": [_item("E1"), _item("E2"), _item("E3")]})
 
@@ -162,8 +167,8 @@ async def test_ac_fr18_2_window_over_7_days_covers_full_period_without_loss_or_d
 ):
     """Окно 10 дней -> 2 сегмента (7+3): все элементы обоих сегментов присутствуют,
     без потерь и без дублей на стыке."""
-    from ktalk_mcp.calendar_reader import get_calendar_window
-    from ktalk_mcp.client import KTalkClient
+    from ktalk_cli.calendar_reader import get_calendar_window
+    from ktalk_cli.client import KTalkClient
 
     segment1_items = [_item(f"E{i}") for i in range(1, 6)]  # E1..E5
     segment2_items = [_item(f"E{i}") for i in range(6, 9)]  # E6..E8
@@ -185,8 +190,8 @@ async def test_dedup_at_segment_boundary_same_id_in_two_adjacent_segments(
 ):
     """Событие ровно на границе двух сегментов, вернувшееся сервером в обоих ответах,
     остаётся ровно один раз в результате (rooms-calendar-spec «Дедуп на стыках»)."""
-    from ktalk_mcp.calendar_reader import get_calendar_window
-    from ktalk_mcp.client import KTalkClient
+    from ktalk_cli.calendar_reader import get_calendar_window
+    from ktalk_cli.client import KTalkClient
 
     boundary = _item("EVT-BOUNDARY", start="2026-08-07T23:00:00+03:00")
     httpx_mock.add_response(json={"items": [_item("E1"), boundary]})
@@ -200,25 +205,6 @@ async def test_dedup_at_segment_boundary_same_id_in_two_adjacent_segments(
     assert set(ids) == {"E1", "EVT-BOUNDARY", "E2"}
 
 
-# --- AC-3: start обязателен, отказ до сети (на уровне MCP-инструмента) ------------------
-
-
-async def test_ac_fr18_3_missing_start_rejected_before_network_call(httpx_mock: HTTPXMock):
-    """AC FR-18/3: начало окна не указано вызывающим -> инструмент отклоняет запрос
-    сам, с понятным сообщением, не сырым 400 сервера — и это решается ДО сети.
-
-    Вызывает `.fn` инструмента напрямую (минуя `get_shared_client()`/транспорт MCP) —
-    достаточно и корректно, поскольку по архитектуре (§5.6) проверка `start is None`
-    идёт первой строкой, раньше получения клиента."""
-    from ktalk_mcp.server import mcp
-
-    tool = await mcp.get_tool("ktalk_list_calendar")
-    with pytest.raises(Exception, match="начал"):
-        await tool.fn(start=None, end="2026-08-20")
-
-    assert httpx_mock.get_requests() == []
-
-
 # --- AC-4: потолок 100 на сегмент --------------------------------------------------------
 
 
@@ -227,8 +213,8 @@ async def test_ac_fr18_4_segment_with_exactly_100_items_flags_incomplete(
 ):
     """Сегмент, вернувший ровно 100 элементов (фактический потолок Ф-21), не тихо
     усекается, а помечается предупреждением о возможной неполноте."""
-    from ktalk_mcp.calendar_reader import get_calendar_window
-    from ktalk_mcp.client import KTalkClient
+    from ktalk_cli.calendar_reader import get_calendar_window
+    from ktalk_cli.client import KTalkClient
 
     items = [_item(f"E{i}") for i in range(100)]
     httpx_mock.add_response(json={"items": items})
@@ -243,8 +229,8 @@ async def test_ac_fr18_4_segment_with_exactly_100_items_flags_incomplete(
 async def test_segment_with_fewer_than_100_items_does_not_flag_incomplete(
     httpx_mock: HTTPXMock, base_url, session_token
 ):
-    from ktalk_mcp.calendar_reader import get_calendar_window
-    from ktalk_mcp.client import KTalkClient
+    from ktalk_cli.calendar_reader import get_calendar_window
+    from ktalk_cli.client import KTalkClient
 
     httpx_mock.add_response(json={"items": [_item("E1")]})
 
@@ -260,8 +246,8 @@ async def test_segment_with_fewer_than_100_items_does_not_flag_incomplete(
 async def test_ac_fr18_5_room_name_filter_passed_through_to_server(
     httpx_mock: HTTPXMock, base_url, session_token
 ):
-    from ktalk_mcp.calendar_reader import get_calendar_window
-    from ktalk_mcp.client import KTalkClient
+    from ktalk_cli.calendar_reader import get_calendar_window
+    from ktalk_cli.client import KTalkClient
 
     httpx_mock.add_response(json={"items": []})
 
@@ -274,42 +260,19 @@ async def test_ac_fr18_5_room_name_filter_passed_through_to_server(
     assert "roomName=test-room-alpha" in str(request.url)
 
 
-# --- AC-6: query не входит в публичный интерфейс ------------------------------------------
-
-
-async def test_ac_fr18_6_query_parameter_not_in_public_tool_schema():
-    """Параметр `query` синтаксически принимается сервером, но не фильтрует (Ф-24) —
-    не публикуется наружу, чтобы не вводить вызывающего в заблуждение."""
-    from ktalk_mcp.server import mcp
-
-    tools = await mcp.list_tools()
-    schema = {t.name: t for t in tools}["ktalk_list_calendar"].parameters
-    assert "query" not in schema.get("properties", {})
-
-
 # --- AC-7: текст не утверждает "ваш календарь" --------------------------------------------
 
 
 def test_ac_fr18_7_calendar_formatter_does_not_claim_personal_calendar():
     """Формулировка нейтральна ("запланированные встречи, видимые активной
     авторизации") до подтверждения принадлежности выдачи (Ф-30, открытый вопрос)."""
-    from ktalk_mcp.formatters import format_calendar
+    from ktalk_cli.formatters import format_calendar
 
     text = format_calendar({"items": [_item("E1")], "incomplete_segments": []}).lower()
     assert "ваш календарь" not in text
     assert "личный календарь" not in text
     assert "my calendar" not in text
     assert "your calendar" not in text
-
-
-async def test_ac_fr18_7_calendar_tool_docstring_does_not_claim_personal_calendar():
-    from ktalk_mcp.server import mcp
-
-    tools = await mcp.list_tools()
-    tool = {t.name: t for t in tools}["ktalk_list_calendar"]
-    description = (tool.description or "").lower()
-    assert "ваш календарь" not in description
-    assert "your calendar" not in description
 
 
 # --- §5.5 решающая таблица `_fetch_segment` -----------------------------------------------
@@ -320,9 +283,9 @@ async def test_fetch_segment_200_items_absent_raises_contour_drift_without_corre
 ):
     """200, `items` отсутствует -> ContourDriftError сразу, без лишнего сетевого
     вызова на корреляцию (форма контракта уже сломана, права/сеть ни при чём)."""
-    from ktalk_mcp.calendar_reader import get_calendar_window
-    from ktalk_mcp.client import KTalkClient
-    from ktalk_mcp.contour_diagnostics import ContourDriftError
+    from ktalk_cli.calendar_reader import get_calendar_window
+    from ktalk_cli.client import KTalkClient
+    from ktalk_cli.contour_diagnostics import ContourDriftError
 
     httpx_mock.add_response(json={"unexpectedShape": True})
 
@@ -343,9 +306,9 @@ async def test_fetch_segment_known_400_text_gives_plain_error_without_correlatio
     `test_fr39_calendar_inclusive_end.py::test_ac5_...`) — этот тест переключён на
     валидный `start < end` и другой известный 400-текст каталога Ф-26, чтобы
     по-прежнему бить в сеть и проверять решающую таблицу `_fetch_segment`."""
-    from ktalk_mcp.calendar_reader import get_calendar_window
-    from ktalk_mcp.client import KTalkClient, KTalkError
-    from ktalk_mcp.contour_diagnostics import ContourDriftError
+    from ktalk_cli.calendar_reader import get_calendar_window
+    from ktalk_cli.client import KTalkClient, KTalkError
+    from ktalk_cli.contour_diagnostics import ContourDriftError
 
     httpx_mock.add_response(
         status_code=400, text="Период запроса не должен превышать 7 дней"
@@ -363,9 +326,9 @@ async def test_fetch_segment_unknown_400_text_triggers_correlation_and_drift(
     httpx_mock: HTTPXMock, base_url, session_token
 ):
     """400 с текстом ВНЕ каталога Ф-26 -> сигнал дрейфа, запускает корреляцию."""
-    from ktalk_mcp.calendar_reader import get_calendar_window
-    from ktalk_mcp.client import KTalkClient
-    from ktalk_mcp.contour_diagnostics import ContourDriftError
+    from ktalk_cli.calendar_reader import get_calendar_window
+    from ktalk_cli.client import KTalkClient
+    from ktalk_cli.contour_diagnostics import ContourDriftError
 
     httpx_mock.add_response(status_code=400, text="Совершенно незнакомый текст ошибки")
     httpx_mock.add_response(json={"recordings": []})  # control call
@@ -378,7 +341,7 @@ async def test_fetch_segment_unknown_400_text_triggers_correlation_and_drift(
 
 
 def test_known_400_texts_catalog_matches_f26_dословно():
-    from ktalk_mcp.calendar_reader import KNOWN_400_TEXTS
+    from ktalk_cli.calendar_reader import KNOWN_400_TEXTS
 
     assert "Дата начала является обязательной для заполнения" in KNOWN_400_TEXTS
     assert "Период запроса не должен превышать 7 дней" in KNOWN_400_TEXTS
@@ -397,8 +360,8 @@ async def test_nfr7_get_calendar_apikey_mode_refuses_before_network_call(
 
     Code review (epic-capability-pairing, Р1/Р2): `get_calendar` подтверждён только
     под session — сообщение обязано советовать её, не ключ."""
-    from ktalk_mcp.calendar_reader import get_calendar_window
-    from ktalk_mcp.client import KTalkClient, OperationNotAvailableError
+    from ktalk_cli.calendar_reader import get_calendar_window
+    from ktalk_cli.client import KTalkClient, OperationNotAvailableError
 
     async with KTalkClient(base_url=base_url, personal_api_key=personal_api_key) as client:
         with pytest.raises(OperationNotAvailableError, match="режиме сессии"):
@@ -410,9 +373,9 @@ async def test_nfr7_get_calendar_apikey_mode_refuses_before_network_call(
 async def test_fetch_segment_network_error_triggers_correlation_and_drift(
     httpx_mock: HTTPXMock, base_url, session_token
 ):
-    from ktalk_mcp.calendar_reader import get_calendar_window
-    from ktalk_mcp.client import KTalkClient
-    from ktalk_mcp.contour_diagnostics import ContourDriftError
+    from ktalk_cli.calendar_reader import get_calendar_window
+    from ktalk_cli.client import KTalkClient
+    from ktalk_cli.contour_diagnostics import ContourDriftError
 
     httpx_mock.add_exception(httpx.ConnectError("connection refused"))
     httpx_mock.add_response(json={"recordings": []})  # control call

@@ -35,8 +35,8 @@ def test_r5_export_without_any_explicit_path_does_not_write_mirror_inside_centra
     monkeypatch.setenv("HOME", str(home))
     monkeypatch.chdir(project)
 
-    from ktalk_mcp.cli import main
-    from ktalk_mcp.store import resolve_store_root
+    from ktalk_cli.cli import main
+    from ktalk_cli.store import resolve_store_root
 
     rc = main(["export", "--json"])
     assert rc == 0

@@ -13,7 +13,7 @@ import stat
 
 
 def _seed(db_path):
-    from ktalk_mcp.registry import Registry
+    from ktalk_cli.registry import Registry
 
     with Registry(db_path) as reg:
         reg.upsert_recording(
@@ -25,8 +25,8 @@ def _seed(db_path):
 def test_maj04_migrate_to_central_store_command_moves_data_and_backs_up_source(
     tmp_path, monkeypatch, capsys
 ):
-    from ktalk_mcp.cli import main
-    from ktalk_mcp.registry import Registry
+    from ktalk_cli.cli import main
+    from ktalk_cli.registry import Registry
 
     source = tmp_path / "vault" / ".registry.db"
     source.parent.mkdir(parents=True)
@@ -60,7 +60,7 @@ def test_maj04_command_is_registry_free_and_target_gets_nfr15_perms(
     формулировки рекомендации отчёта (security-review-ktalk-plugin.md, MAJ-04) —
     см. обоснование в dev-заметке. Целевой файл миграции обязан получить
     NFR-15-права (BLOCK-01 остаётся закрытым и на CLI-уровне)."""
-    from ktalk_mcp.cli import _REGISTRY_FREE_COMMANDS, main
+    from ktalk_cli.cli import _REGISTRY_FREE_COMMANDS, main
 
     assert "migrate-to-central-store" in _REGISTRY_FREE_COMMANDS
 
@@ -77,7 +77,7 @@ def test_maj04_command_is_registry_free_and_target_gets_nfr15_perms(
 
 
 def test_maj04_target_already_exists_nonzero_exit_source_untouched(tmp_path, capsys):
-    from ktalk_mcp.cli import main
+    from ktalk_cli.cli import main
 
     source = tmp_path / "vault" / ".registry.db"
     source.parent.mkdir(parents=True)
@@ -92,7 +92,7 @@ def test_maj04_target_already_exists_nonzero_exit_source_untouched(tmp_path, cap
 
 
 def test_maj04_default_target_is_machine_default_store_root(tmp_path, monkeypatch, capsys):
-    from ktalk_mcp.cli import main
+    from ktalk_cli.cli import main
 
     monkeypatch.delenv("XDG_DATA_HOME", raising=False)
     fake_home = tmp_path / "home"
@@ -106,6 +106,6 @@ def test_maj04_default_target_is_machine_default_store_root(tmp_path, monkeypatc
     assert rc == 0
     out = json.loads(capsys.readouterr().out)
 
-    from ktalk_mcp.store import resolve_store_root
+    from ktalk_cli.store import resolve_store_root
 
     assert out["target"] == str(resolve_store_root() / "registry.db")

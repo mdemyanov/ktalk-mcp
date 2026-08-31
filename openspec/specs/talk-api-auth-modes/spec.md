@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Governs how `ktalk-mcp` resolves which credential authorizes a request to Контур.Толк, which
+Governs how `ktalk-cli` resolves which credential authorizes a request to Контур.Толк, which
 transport carries it, how the client diagnoses an expired credential versus a credential that
 lacks a required scope, and how a caller checks the health of the active credential without
 touching the local registry. Source: `content/30-requirements/personal-api-key.md` FR-1…FR-6,

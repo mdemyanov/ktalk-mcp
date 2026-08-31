@@ -6,18 +6,20 @@
 `{id}` с `+`/`/`/`=` (Ф-56, регресс SEC-001 на новом типе идентификатора);
 транспорт mutating (заголовки, отсутствие query, ADR-009); отсутствие
 авто-retry; предпросмотр без единого сетевого вызова (перехват
-`httpx.AsyncClient.send`); отсутствие мутирующего MCP-инструмента для отмены;
-`update_meeting` вне периметра -> управляемый отказ, не `KeyError`.
+`httpx.AsyncClient.send`); `update_meeting` вне периметра -> управляемый отказ,
+не `KeyError`. (Проверка «отсутствие мутирующего MCP-инструмента для отмены»
+удалена ADR-022 вместе с MCP-слоем целиком — вопрос снят фактом отсутствия
+самого MCP-сервера, не только инструмента.)
 
 Расположение сетевого шага `cancel_meeting` — решение Dev (ADR-011-spec §3).
-Здесь он импортируется из `ktalk_mcp.meeting_scheduling` (симметрично
-`create_meeting`); `ktalk_mcp.meeting_cancel` держит чистые функции
+Здесь он импортируется из `ktalk_cli.meeting_scheduling` (симметрично
+`create_meeting`); `ktalk_cli.meeting_cancel` держит чистые функции
 (`build_cancel_confirmation_payload`, `CancelPreviewService`). См.
 «Допущения» в at-design-contacts-and-cancel.md — если Dev выберет другое
 расположение, правка одной строки импорта на тест.
 
-Красные по замыслу: `ktalk_mcp.meeting_cancel` не существует, `cancel_meeting`
-не существует в `ktalk_mcp.meeting_scheduling`.
+Красные по замыслу: `ktalk_cli.meeting_cancel` не существует, `cancel_meeting`
+не существует в `ktalk_cli.meeting_scheduling`.
 """
 
 from __future__ import annotations
@@ -51,7 +53,7 @@ def personal_api_key():
 
 
 def _store():
-    from ktalk_mcp.confirmation import ConfirmationStore
+    from ktalk_cli.confirmation import ConfirmationStore
 
     return ConfirmationStore()
 
@@ -60,7 +62,7 @@ def _store():
 
 
 def test_build_cancel_confirmation_payload_shape():
-    from ktalk_mcp.meeting_cancel import build_cancel_confirmation_payload
+    from ktalk_cli.meeting_cancel import build_cancel_confirmation_payload
 
     payload = build_cancel_confirmation_payload(id=SIMPLE_ID, reason="встреча переносится")
 
@@ -72,7 +74,7 @@ def test_build_cancel_confirmation_payload_shape():
 
 
 def test_build_cancel_confirmation_payload_default_reason_is_empty_string():
-    from ktalk_mcp.meeting_cancel import build_cancel_confirmation_payload
+    from ktalk_cli.meeting_cancel import build_cancel_confirmation_payload
 
     payload = build_cancel_confirmation_payload(id=SIMPLE_ID)
 
@@ -83,7 +85,7 @@ def test_build_cancel_confirmation_payload_default_reason_is_empty_string():
 
 
 def test_cancel_preview_service_has_no_network_client_parameter():
-    from ktalk_mcp.meeting_cancel import CancelPreviewService
+    from ktalk_cli.meeting_cancel import CancelPreviewService
 
     params = set(inspect.signature(CancelPreviewService.preview).parameters) - {"self"}
     assert "client" not in params
@@ -93,7 +95,7 @@ def test_cancel_preview_performs_zero_network_calls(httpx_mock: HTTPXMock):
     """Доказано перехватом транспорта (`httpx_mock.get_requests()`), не чтением
     кода — тот же приём, что `test_ac_fr13_1_preview_performs_zero_network_calls`
     для создания."""
-    from ktalk_mcp.meeting_cancel import CancelPreviewService
+    from ktalk_cli.meeting_cancel import CancelPreviewService
 
     service = CancelPreviewService(_store())
     payload, confirmation_id = service.preview(id=SIMPLE_ID, reason="x")
@@ -104,7 +106,7 @@ def test_cancel_preview_performs_zero_network_calls(httpx_mock: HTTPXMock):
 
 
 def test_cancel_preview_two_issues_of_same_payload_give_different_confirmation_ids():
-    from ktalk_mcp.meeting_cancel import CancelPreviewService
+    from ktalk_cli.meeting_cancel import CancelPreviewService
 
     service = CancelPreviewService(_store())
 
@@ -115,8 +117,8 @@ def test_cancel_preview_two_issues_of_same_payload_give_different_confirmation_i
 
 
 def test_cancel_match_false_for_unknown_confirmation_id():
-    from ktalk_mcp.meeting_body import canonical_body_hash
-    from ktalk_mcp.meeting_cancel import build_cancel_confirmation_payload
+    from ktalk_cli.meeting_body import canonical_body_hash
+    from ktalk_cli.meeting_cancel import build_cancel_confirmation_payload
 
     store = _store()
     payload = build_cancel_confirmation_payload(id=SIMPLE_ID, reason="x")
@@ -134,8 +136,8 @@ def test_ac_11_1_confirmation_issued_for_id_a_does_not_match_id_b_same_reason():
     `{"reason": reason}` без `id` совпал бы всегда (особенно при
     `reason=""`, единственном наблюдённом образце). Хеш обязан быть построен
     над `{"operation", "id", "reason"}`, не над одним `reason`."""
-    from ktalk_mcp.meeting_body import canonical_body_hash
-    from ktalk_mcp.meeting_cancel import build_cancel_confirmation_payload
+    from ktalk_cli.meeting_body import canonical_body_hash
+    from ktalk_cli.meeting_cancel import build_cancel_confirmation_payload
 
     store = _store()
     payload_a = build_cancel_confirmation_payload(id="meeting-A", reason="x")
@@ -151,8 +153,8 @@ def test_ac_11_1_via_cancel_preview_service_end_to_end():
     """Тот же сценарий на уровне `CancelPreviewService` целиком (не только
     компоновщика), чтобы поймать регресс, если Dev захешировал бы что-то
     иное внутри `preview`, чем `build_cancel_confirmation_payload`."""
-    from ktalk_mcp.meeting_body import canonical_body_hash
-    from ktalk_mcp.meeting_cancel import CancelPreviewService, build_cancel_confirmation_payload
+    from ktalk_cli.meeting_body import canonical_body_hash
+    from ktalk_cli.meeting_cancel import CancelPreviewService, build_cancel_confirmation_payload
 
     store = _store()
     service = CancelPreviewService(store)
@@ -171,8 +173,8 @@ async def test_ac_11_2_cancel_meeting_quotes_id_with_plus_slash_equals(
 ):
     """Ф-56: без `quote_path_param` путь молча собьётся — синтетический id
     несёт все три спецсимвола base64 Exchange одновременно."""
-    from ktalk_mcp.client import KTalkClient
-    from ktalk_mcp.meeting_scheduling import cancel_meeting
+    from ktalk_cli.client import KTalkClient
+    from ktalk_cli.meeting_scheduling import cancel_meeting
 
     httpx_mock.add_response(status_code=200, json={})
 
@@ -194,8 +196,8 @@ async def test_ac_11_2_cancel_meeting_quotes_id_with_plus_slash_equals(
 async def test_cancel_meeting_posts_to_expected_path(
     httpx_mock: HTTPXMock, base_url, session_token
 ):
-    from ktalk_mcp.client import KTalkClient
-    from ktalk_mcp.meeting_scheduling import cancel_meeting
+    from ktalk_cli.client import KTalkClient
+    from ktalk_cli.meeting_scheduling import cancel_meeting
 
     httpx_mock.add_response(status_code=200, json={})
 
@@ -216,8 +218,8 @@ async def test_ac_11_3_default_empty_reason_sends_empty_string_in_body(
     """Ф-50: единственная подтверждённая живым запросом конфигурация."""
     import json as _json
 
-    from ktalk_mcp.client import KTalkClient
-    from ktalk_mcp.meeting_scheduling import cancel_meeting
+    from ktalk_cli.client import KTalkClient
+    from ktalk_cli.meeting_scheduling import cancel_meeting
 
     httpx_mock.add_response(status_code=200, json={})
 
@@ -236,9 +238,9 @@ async def test_ac_11_4_non_empty_reason_included_verbatim_in_payload_and_body(
     исход сервера (ADR-011-spec явно запрещает утверждать код ответа)."""
     import json as _json
 
-    from ktalk_mcp.client import KTalkClient
-    from ktalk_mcp.meeting_cancel import build_cancel_confirmation_payload
-    from ktalk_mcp.meeting_scheduling import cancel_meeting
+    from ktalk_cli.client import KTalkClient
+    from ktalk_cli.meeting_cancel import build_cancel_confirmation_payload
+    from ktalk_cli.meeting_scheduling import cancel_meeting
 
     reason = "встреча переносится на следующую неделю"
     payload = build_cancel_confirmation_payload(id=SIMPLE_ID, reason=reason)
@@ -259,8 +261,8 @@ async def test_ac_11_4_non_empty_reason_included_verbatim_in_payload_and_body(
 async def test_cancel_meeting_sends_mutating_headers_without_session_token_in_query(
     httpx_mock: HTTPXMock, base_url, session_token
 ):
-    from ktalk_mcp.client import KTalkClient
-    from ktalk_mcp.meeting_scheduling import cancel_meeting
+    from ktalk_cli.client import KTalkClient
+    from ktalk_cli.meeting_scheduling import cancel_meeting
 
     httpx_mock.add_response(status_code=200, json={})
 
@@ -285,8 +287,8 @@ async def test_ac_11_5_network_failure_does_not_trigger_automatic_retry_exactly_
     (`list_recordings(top=1)`), не повтор POST — тот же паттерн, что
     `test_ac_fr13_6_network_failure_does_not_trigger_automatic_retry` для
     создания."""
-    from ktalk_mcp.client import KTalkClient
-    from ktalk_mcp.meeting_scheduling import cancel_meeting
+    from ktalk_cli.client import KTalkClient
+    from ktalk_cli.meeting_scheduling import cancel_meeting
 
     cancel_path = re.compile(rf"^{re.escape(base_url)}/api/calendar/{SIMPLE_ID}/cancel(\?.*)?$")
     control_path = re.compile(rf"^{re.escape(base_url)}/api/recordings(\?.*)?$")
@@ -311,8 +313,8 @@ async def test_nfr7_cancel_meeting_apikey_mode_refuses_before_network_call(
 ):
     """Code review (epic-capability-pairing, Р1/Р2): `cancel_meeting` подтверждён
     только под session — сообщение обязано советовать её, не ключ."""
-    from ktalk_mcp.client import KTalkClient, OperationNotAvailableError
-    from ktalk_mcp.meeting_scheduling import cancel_meeting
+    from ktalk_cli.client import KTalkClient, OperationNotAvailableError
+    from ktalk_cli.meeting_scheduling import cancel_meeting
 
     async with KTalkClient(base_url=base_url, personal_api_key=personal_api_key) as client:
         with pytest.raises(OperationNotAvailableError, match="режиме сессии"):
@@ -322,8 +324,8 @@ async def test_nfr7_cancel_meeting_apikey_mode_refuses_before_network_call(
 
 
 def test_operation_profiles_cancel_meeting_session_mutating_apikey_none():
-    from ktalk_mcp.auth import OPERATION_PROFILES
-    from ktalk_mcp.config import AuthMode
+    from ktalk_cli.auth import OPERATION_PROFILES
+    from ktalk_cli.config import AuthMode
 
     profile = OPERATION_PROFILES["cancel_meeting"]
     session_profile = profile[AuthMode.SESSION]
@@ -344,7 +346,7 @@ async def test_ac_11_6_profile_for_missing_update_meeting_raises_not_available_n
     режима) — существующий общий механизм `_profile_for` уже даёт
     управляемый отказ на полностью отсутствующий ключ, отдельной реализации
     не требует."""
-    from ktalk_mcp.client import KTalkClient, OperationNotAvailableError
+    from ktalk_cli.client import KTalkClient, OperationNotAvailableError
 
     async with KTalkClient(base_url=base_url, session_token=session_token) as client:
         with pytest.raises(OperationNotAvailableError):
@@ -352,41 +354,16 @@ async def test_ac_11_6_profile_for_missing_update_meeting_raises_not_available_n
 
 
 def test_update_meeting_has_no_entry_in_operation_profiles():
-    from ktalk_mcp.auth import OPERATION_PROFILES
+    from ktalk_cli.auth import OPERATION_PROFILES
 
     assert "update_meeting" not in OPERATION_PROFILES
-
-
-# --- MCP: только предпросмотр, нет мутатора --------------------------------------------------
-
-
-async def test_ktalk_preview_cancel_meeting_tool_registered_with_id_required():
-    from ktalk_mcp.server import mcp
-
-    tools = await mcp.list_tools()
-    tools_by_name = {t.name: t for t in tools}
-
-    assert "ktalk_preview_cancel_meeting" in tools_by_name
-    schema = tools_by_name["ktalk_preview_cancel_meeting"].parameters
-    assert "id" in set(schema.get("required", []))
-
-
-async def test_no_mutating_mcp_tool_exists_for_cancel_meeting():
-    """ADR-011 §5: мутирующего MCP-инструмента для отмены нет и не появится —
-    только `ktalk_preview_cancel_meeting`, тем же приёмом, что и для создания."""
-    from ktalk_mcp.server import mcp
-
-    tools = await mcp.list_tools()
-    cancel_related = [t.name for t in tools if "cancel" in t.name.lower()]
-
-    assert cancel_related == ["ktalk_preview_cancel_meeting"]
 
 
 # --- Форматтер и секреты ----------------------------------------------------------------------
 
 
 def test_format_cancel_preview_prints_id_reason_confirmation_id():
-    from ktalk_mcp.formatters import format_cancel_preview
+    from ktalk_cli.formatters import format_cancel_preview
 
     text = format_cancel_preview(
         {
@@ -403,8 +380,8 @@ def test_format_cancel_preview_prints_id_reason_confirmation_id():
 async def test_secret_not_in_cancel_meeting_error_message(
     httpx_mock: HTTPXMock, base_url, session_token
 ):
-    from ktalk_mcp.client import KTalkClient, KTalkWriteAuthMismatchError
-    from ktalk_mcp.meeting_scheduling import cancel_meeting
+    from ktalk_cli.client import KTalkClient, KTalkWriteAuthMismatchError
+    from ktalk_cli.meeting_scheduling import cancel_meeting
 
     cancel_path = re.compile(rf"^{re.escape(base_url)}/api/calendar/{SIMPLE_ID}/cancel(\?.*)?$")
     control_path = re.compile(rf"^{re.escape(base_url)}/api/recordings(\?.*)?$")
@@ -429,8 +406,8 @@ async def test_cancel_meeting_returns_empty_dict_on_200_with_empty_body(
     телом. Безусловный `response.json()` падал на `JSONDecodeError`, и CLI печатал
     «исход неизвестен» по успешной операции — худший вид ошибки для необратимого
     действия. Ф-50 фиксировала только код ответа, не наличие тела."""
-    from ktalk_mcp.client import KTalkClient
-    from ktalk_mcp.meeting_scheduling import cancel_meeting
+    from ktalk_cli.client import KTalkClient
+    from ktalk_cli.meeting_scheduling import cancel_meeting
 
     httpx_mock.add_response(status_code=200, content=b"")
 

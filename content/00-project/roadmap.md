@@ -17,9 +17,9 @@ properties:
 
 | Фаза | Результат | Где код |
 |------|-----------|---------|
-| PoC | MCP-сервер: 5 tools поверх KTalk API, форматтеры JSON → markdown | [tools_recordings.py](../../src/ktalk_mcp/tools_recordings.py), [formatters.py](../../src/ktalk_mcp/formatters.py) |
-| MVP | Чанкинг транскриптов (`chunk`, `chunk_size`) — длинные записи читаются постранично | [formatters.py](../../src/ktalk_mcp/formatters.py) |
-| Pilot | CLI-реестр на SQLite: `sync`, `dashboard`, `list`, `show`, `mark-*`, `export`, `migrate` | [cli.py](../../src/ktalk_mcp/cli.py), [registry.py](../../src/ktalk_mcp/registry.py) |
+| PoC | MCP-сервер: 5 tools поверх KTalk API, форматтеры JSON → markdown | `tools_recordings.py` (снят ADR-022 вместе с MCP-слоем, история — в git), [formatters.py](../../src/ktalk_cli/formatters.py) |
+| MVP | Чанкинг транскриптов (`chunk`, `chunk_size`) — длинные записи читаются постранично | [formatters.py](../../src/ktalk_cli/formatters.py) |
+| Pilot | CLI-реестр на SQLite: `sync`, `dashboard`, `list`, `show`, `mark-*`, `export`, `migrate` | [cli.py](../../src/ktalk_cli/cli.py), [registry.py](../../src/ktalk_cli/registry.py) |
 | Production | Реестр как операционный source of truth, markdown-зеркало в vault генерируется | [ADR-002](adr/ADR-002-sqlite-registry.md) |
 | 0.5.0 | Два режима авторизации (session + персональный ключ через `X-Auth-Token`), профили эндпоинтов по режиму, 10 MCP-инструментов, диагностика прав | [ADR-003](adr/ADR-003-auth-modes.md), [требование](../30-requirements/personal-api-key.md) |
 | 0.6.0 | Чтение комнаты и календаря, первая пишущая операция (планирование встречи) с предпросмотром и подтверждением в TTY, починка `auth-status` | [ADR-004](adr/ADR-004-undocumented-contour.md), [ADR-005](adr/ADR-005-write-operations.md), [требование](../30-requirements/rooms-calendar-scheduling.md) |

@@ -1,10 +1,10 @@
-"""AT-design: FR-13 — хранилище подтверждений (`ktalk_mcp.confirmation`).
+"""AT-design: FR-13 — хранилище подтверждений (`ktalk_cli.confirmation`).
 
 Покрывает ADR-005-spec «Форма подтверждения»/«Сценарии отказа»: issue/match/consume,
 TTL, single-use, hash-drift — с инжектируемыми часами (тестируемость без реального
 времени ожидания).
 
-Красные по замыслу: `ktalk_mcp.confirmation` не существует.
+Красные по замыслу: `ktalk_cli.confirmation` не существует.
 """
 
 from __future__ import annotations
@@ -29,7 +29,7 @@ class _FakeClock:
 
 
 def _store(clock: _FakeClock):
-    from ktalk_mcp.confirmation import ConfirmationStore
+    from ktalk_cli.confirmation import ConfirmationStore
 
     return ConfirmationStore(clock=clock)
 
@@ -99,7 +99,7 @@ def test_consume_then_match_returns_false_single_use(clock):
 
 def test_ttl_expiry_makes_match_false_even_with_correct_hash(clock):
     """Confirm после истечения TTL -> отказ, даже если хеш совпал бы."""
-    from ktalk_mcp.confirmation import CONFIRMATION_TTL
+    from ktalk_cli.confirmation import CONFIRMATION_TTL
 
     store = _store(clock)
     confirmation_id = store.issue(HASH_A)
@@ -111,7 +111,7 @@ def test_ttl_expiry_makes_match_false_even_with_correct_hash(clock):
 
 def test_within_ttl_match_still_true():
     """Незадолго до истечения TTL — подтверждение всё ещё действительно."""
-    from ktalk_mcp.confirmation import CONFIRMATION_TTL
+    from ktalk_cli.confirmation import CONFIRMATION_TTL
 
     start = datetime(2026, 8, 13, 12, 0, 0, tzinfo=timezone.utc)
     clock = _FakeClock(start)
@@ -126,7 +126,7 @@ def test_within_ttl_match_still_true():
 def test_confirmation_ttl_is_ten_minutes():
     """Дизайн-выбор ADR-005-spec — 10 минут, не измеренная величина, но фиксируемое
     значение (снимок-регрессия)."""
-    from ktalk_mcp.confirmation import CONFIRMATION_TTL
+    from ktalk_cli.confirmation import CONFIRMATION_TTL
 
     assert CONFIRMATION_TTL == timedelta(minutes=10)
 
@@ -135,7 +135,7 @@ def test_confirmation_id_never_starts_with_a_dash():
     """DEV-012: id уходит на командную строку (`--confirmation-id <id>`), а
     `token_urlsafe` умеет начинаться с `-` — argparse принимал такой id за флаг.
     Регрессия на плавающий отказ примерно в каждом двадцатом вызове."""
-    from ktalk_mcp.confirmation import ConfirmationStore
+    from ktalk_cli.confirmation import ConfirmationStore
 
     store = ConfirmationStore()
     assert all(not store.issue("hash").startswith("-") for _ in range(500))

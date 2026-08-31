@@ -6,7 +6,7 @@ FIXTURES = Path(__file__).parent / "fixtures"
 
 
 def test_parse_participants_field():
-    from ktalk_mcp.registry import parse_participants_field
+    from ktalk_cli.registry import parse_participants_field
 
     parts = parse_participants_field(
         "Муратов Алексей (ktalk:412), Демьянов Максим (ktalk:668)"
@@ -19,7 +19,7 @@ def test_parse_participants_field():
 
 
 def test_parse_duration_field():
-    from ktalk_mcp.registry import parse_duration_field
+    from ktalk_cli.registry import parse_duration_field
 
     assert parse_duration_field("61 мин") == 61
     assert parse_duration_field("1 ч 5 мин") == 65
@@ -28,7 +28,7 @@ def test_parse_duration_field():
 
 
 def test_parse_unprocessed_table():
-    from ktalk_mcp.registry import parse_unprocessed_table
+    from ktalk_cli.registry import parse_unprocessed_table
 
     text = (FIXTURES / "registry.md").read_text(encoding="utf-8")
     rows = parse_unprocessed_table(text)
@@ -42,7 +42,7 @@ def test_parse_unprocessed_table():
 
 
 def test_parse_archive_table():
-    from ktalk_mcp.registry import parse_archive_table
+    from ktalk_cli.registry import parse_archive_table
 
     text = (FIXTURES / "registry-archive-2026-04.md").read_text(encoding="utf-8")
     rows = parse_archive_table(text)
@@ -61,7 +61,7 @@ def _fixture(name: str) -> str:
 
 
 def test_parse_archive_8col_with_participants():
-    from ktalk_mcp.registry import parse_archive_table
+    from ktalk_cli.registry import parse_archive_table
 
     rows = parse_archive_table(_fixture("archive-8col.md"))
     assert len(rows) == 1
@@ -77,7 +77,7 @@ def test_parse_archive_8col_with_participants():
 
 
 def test_parse_archive_unescaped_pipe_in_name():
-    from ktalk_mcp.registry import parse_archive_table
+    from ktalk_cli.registry import parse_archive_table
 
     row = parse_archive_table(_fixture("archive-pipe-in-name.md"))[0]
     assert row["recording_id"] == "v3kbOfHTJTnFTQOv8RjZ"
@@ -88,7 +88,7 @@ def test_parse_archive_unescaped_pipe_in_name():
 
 
 def test_parse_archive_escaped_pipe_7col():
-    from ktalk_mcp.registry import parse_archive_table
+    from ktalk_cli.registry import parse_archive_table
 
     row = parse_archive_table(_fixture("archive-escaped-pipe-7col.md"))[0]
     assert row["recording_id"] == "ZmTErEzMULgA9b6186nX"
@@ -99,7 +99,7 @@ def test_parse_archive_escaped_pipe_7col():
 
 
 def test_parse_archive_duplicated_id():
-    from ktalk_mcp.registry import parse_archive_table
+    from ktalk_cli.registry import parse_archive_table
 
     row = parse_archive_table(_fixture("archive-dup-id.md"))[0]
     assert row["recording_id"] == "xHpXhc29P7VlSOjw9PX0"
@@ -110,7 +110,7 @@ def test_parse_archive_duplicated_id():
 
 
 def test_migrate_imports_rows_and_participants(tmp_path: Path):
-    from ktalk_mcp.registry import Registry, migrate_from_vault
+    from ktalk_cli.registry import Registry, migrate_from_vault
 
     vault = tmp_path / "vault"
     tdir = vault / "95_TRANSCRIPTS"
@@ -140,7 +140,7 @@ def test_migrate_imports_rows_and_participants(tmp_path: Path):
 
 
 def test_migrate_is_idempotent(tmp_path: Path):
-    from ktalk_mcp.registry import Registry, migrate_from_vault
+    from ktalk_cli.registry import Registry, migrate_from_vault
 
     vault = tmp_path / "vault"
     tdir = vault / "95_TRANSCRIPTS"
@@ -157,7 +157,7 @@ def test_migrate_is_idempotent(tmp_path: Path):
 
 
 def test_migrate_dry_run_writes_nothing(tmp_path: Path):
-    from ktalk_mcp.registry import Registry, migrate_from_vault
+    from ktalk_cli.registry import Registry, migrate_from_vault
 
     vault = tmp_path / "vault"
     tdir = vault / "95_TRANSCRIPTS"

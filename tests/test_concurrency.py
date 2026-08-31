@@ -27,7 +27,7 @@ from pathlib import Path
 
 
 def _seed(db_path: Path, n: int) -> None:
-    from ktalk_mcp.registry import Registry
+    from ktalk_cli.registry import Registry
 
     with Registry(db_path) as reg:
         for i in range(n):
@@ -38,7 +38,7 @@ def _seed(db_path: Path, n: int) -> None:
 
 
 def _worker_mark(db_path_str: str, prefix: str, count: int, status: str) -> None:
-    from ktalk_mcp.registry import Registry
+    from ktalk_cli.registry import Registry
 
     with Registry(Path(db_path_str)) as reg:
         for i in range(count):
@@ -76,7 +76,7 @@ def test_ac_nfr13_1_two_processes_concurrent_writes_integrity_ok_no_data_loss(
 
 
 def _worker_set_status(db_path_str: str, recording_id: str, status: str) -> None:
-    from ktalk_mcp.registry import Registry
+    from ktalk_cli.registry import Registry
 
     with Registry(Path(db_path_str)) as reg:
         reg.set_status(recording_id, status)
@@ -99,7 +99,7 @@ def test_ac_nfr13_2_conflicting_write_to_same_record_yields_exactly_one_determin
     p_done.join(timeout=30)
     p_skipped.join(timeout=30)
 
-    from ktalk_mcp.registry import Registry
+    from ktalk_cli.registry import Registry
 
     with Registry(db_path) as reg:
         final = reg.get_recording("rec-0")
@@ -141,7 +141,7 @@ def test_nfr13_busy_timeout_exhausted_raises_recognizable_operational_error(tmp_
     holder.start()
     time.sleep(0.5)  # даём держателю точно взять блокировку первым
 
-    from ktalk_mcp.registry import Registry
+    from ktalk_cli.registry import Registry
 
     caught: Exception | None = None
     try:

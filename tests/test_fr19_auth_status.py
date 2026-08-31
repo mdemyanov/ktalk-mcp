@@ -33,7 +33,7 @@ def test_ac_fr19_1_auth_status_runs_diagnostics_despite_unavailable_registry(
     monkeypatch.delenv("KTALK_PERSONAL_API_KEY", raising=False)
     httpx_mock.add_response(json={"recordings": []})  # проба list_recordings(top=1)
 
-    from ktalk_mcp.cli import main
+    from ktalk_cli.cli import main
 
     rc = main(["--db", UNAVAILABLE_DB, "auth-status", "--json"])
 
@@ -55,7 +55,7 @@ def test_ac_fr19_2_auth_diagnostics_error_not_replaced_by_database_message(
     monkeypatch.delenv("KTALK_PERSONAL_API_KEY", raising=False)
     httpx_mock.add_response(status_code=401)
 
-    from ktalk_mcp.cli import main
+    from ktalk_cli.cli import main
 
     main(["--db", UNAVAILABLE_DB, "auth-status"])
 
@@ -85,7 +85,7 @@ def test_ac_fr19_3_other_commands_still_require_available_registry(
     monkeypatch.delenv("KTALK_SESSION_TOKEN", raising=False)
     monkeypatch.delenv("KTALK_PERSONAL_API_KEY", raising=False)
 
-    from ktalk_mcp.cli import main
+    from ktalk_cli.cli import main
 
     rc = main(["--db", UNAVAILABLE_DB, *argv])
 
@@ -100,7 +100,7 @@ def test_fr19_create_meeting_preview_works_despite_unavailable_registry(
     """rooms-calendar-spec §7.1: `create-meeting-preview` — тоже в
     `_REGISTRY_FREE_COMMANDS`, никогда не читает/не пишет реестр. Проверяем до
     MissingFieldError (не все поля переданы) — реестр всё равно не должен помешать."""
-    from ktalk_mcp.cli import main
+    from ktalk_cli.cli import main
 
     rc = main(["--db", UNAVAILABLE_DB, "create-meeting-preview", "--subject", "X"])
 

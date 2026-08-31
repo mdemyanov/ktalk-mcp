@@ -109,7 +109,7 @@ itself, or its explicit-unavailability marking on the resulting report — that 
 meeting-processing prompt layer (a different repository, ADR-012 boundary), which reads this
 declared value to decide whether to attempt the match at all. The requirement text's framing ("a
 processing step reaches profile matching, and marks it unavailable") describes behavior at that
-outer layer, not inside `ktalk-mcp`.
+outer layer, not inside `ktalk-cli`.
 
 #### Scenario: An absent `integrations.qmd` key is exposed as "not declared", not defaulted to a guess
 

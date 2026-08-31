@@ -1,12 +1,14 @@
 """AT-design: FR-39 — включительная правая граница окна чтения календаря
 (`content/40-architecture/at-design-rooms-calendar.md`, раздел «FR-39»).
 
-Покрывает все 6 AC FR-39 из `content/30-requirements/rooms-calendar-scheduling.md`
-(BA-009, волна 7): CLI `--start D --end D` (AC-1), паритет с MCP `ktalk_list_calendar`
-(AC-2), окно шире 7 дней без потерь на стыках сегментов (AC-3), три однодневных окна на
-начале/середине/конце диапазона (AC-4), `start > end` отклоняется до сети (AC-5), честное
-«встреч нет» неотличимо кодом возврата от отклонённого некорректного окна (AC-6, класс
-«замаскированный отказ»).
+Покрывает 6 AC FR-39 из `content/30-requirements/rooms-calendar-scheduling.md`
+(BA-009, волна 7): CLI `--start D --end D` (AC-1), окно шире 7 дней без потерь на стыках
+сегментов (AC-3), три однодневных окна на начале/середине/конце диапазона (AC-4),
+`start > end` отклоняется до сети (AC-5), честное «встреч нет» неотличимо кодом возврата
+от отклонённого некорректного окна (AC-6, класс «замаскированный отказ»). AC-2 (паритет с
+MCP `ktalk_list_calendar`) проверялся отдельным тестом — ADR-022 снимает MCP-слой целиком,
+проверка удалена вместе с `server.py`; паритет по-прежнему верен (оба входа делят
+`get_calendar_window`), просто у MCP-стороны больше нет входа для сравнения.
 
 Мок сервера воспроизводит РЕАЛЬНУЮ полуоткрытость сервера (Ф-60 RES-004: `[start 00:00,
 end 00:00)`, `end`-день никогда не включён) и реальные пороги (Ф-63: `(end-start).days<=7`,
@@ -73,29 +75,9 @@ def _run_cli(argv, monkeypatch, base_url="https://test.ktalk.ru", session_token=
     monkeypatch.setenv("KTALK_BASE_URL", base_url)
     monkeypatch.setenv("KTALK_SESSION_TOKEN", session_token)
     monkeypatch.delenv("KTALK_PERSONAL_API_KEY", raising=False)
-    from ktalk_mcp.cli import main
+    from ktalk_cli.cli import main
 
     return main(["--db", "/nonexistent/path/does-not-exist/registry.db", *argv])
-
-
-async def _call_mcp_list_calendar(
-    monkeypatch, base_url="https://test.ktalk.ru", session_token="sess-fr39", **kwargs
-) -> str:
-    """Вызывает `ktalk_list_calendar` через реальный `get_shared_client()` (не `.fn`
-    в обход клиента, как FR-18 AC-3) — AC-2 сравнивает результат с CLI, а CLI бьёт в
-    сеть, значит и MCP-путь этого теста должен. Синглтон сбрасывается через
-    `monkeypatch.setattr` — откатывается автоматически, не течёт в другие тесты
-    (см. at-design-rooms-calendar.md «Допущения», ревизия FR-39)."""
-    import ktalk_mcp.client as client_module
-    from ktalk_mcp.server import mcp
-
-    monkeypatch.setenv("KTALK_BASE_URL", base_url)
-    monkeypatch.setenv("KTALK_SESSION_TOKEN", session_token)
-    monkeypatch.delenv("KTALK_PERSONAL_API_KEY", raising=False)
-    monkeypatch.setattr(client_module, "_shared_client", None)
-
-    tool = await mcp.get_tool("ktalk_list_calendar")
-    return await tool.fn(format="raw", **kwargs)
 
 
 # === AC-1: CLI --start D --end D отдаёт встречи этого дня ==================================
@@ -118,25 +100,6 @@ def test_ac1_cli_single_day_window_returns_that_days_meetings(
         "AC-1: --start 2026-08-17 --end 2026-08-17 должен отдать встречу дня 17-го, "
         f"а получил {ids} — правая граница `end` уходит в сервер как исключающая "
         "(Ф-60 RES-004), день D никогда не попадает в [D 00:00, D 00:00)"
-    )
-
-
-# === AC-2: тот же результат через MCP ktalk_list_calendar ==================================
-
-
-async def test_ac2_mcp_single_day_window_matches_cli_result(
-    httpx_mock: HTTPXMock, monkeypatch
-):
-    _mount_honest_mock(httpx_mock, [("E1", date(2026, 8, 17))])
-
-    raw = await _call_mcp_list_calendar(monkeypatch, start="2026-08-17", end="2026-08-17")
-    data = json.loads(raw)
-    ids = {i["id"] for i in data["items"]}
-
-    assert ids == {"E1"}, (
-        "AC-2: ktalk_list_calendar(start='2026-08-17', end='2026-08-17') должен вернуть "
-        f"E1, получил {ids} — тот же дефект полуоткрытой границы, что и CLI (AC-1), "
-        "оба входа делят один нижний уровень `get_calendar_window`"
     )
 
 

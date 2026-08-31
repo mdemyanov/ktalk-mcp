@@ -20,7 +20,7 @@ import pytest
 
 
 def test_config_show_json_reflects_ktalk_toml(tmp_path, monkeypatch, capsys):
-    from ktalk_mcp.cli import main
+    from ktalk_cli.cli import main
 
     (tmp_path / ".ktalk.toml").write_text(
         '[registry]\ndb_path = "custom.db"\n[directories]\npeople = "10_PEOPLE"\n',
@@ -39,7 +39,7 @@ def test_config_show_json_reflects_ktalk_toml(tmp_path, monkeypatch, capsys):
 def test_config_show_no_config_file_prints_defaults_without_error(
     tmp_path, monkeypatch, capsys
 ):
-    from ktalk_mcp.cli import main
+    from ktalk_cli.cli import main
 
     monkeypatch.delenv("CLAUDE_PROJECT_DIR", raising=False)
     monkeypatch.chdir(tmp_path)  # ни .ktalk.toml, ни .git
@@ -52,7 +52,7 @@ def test_config_show_no_config_file_prints_defaults_without_error(
 def test_config_show_undeclared_routing_key_absent_from_json_not_null(
     tmp_path, monkeypatch, capsys
 ):
-    from ktalk_mcp.cli import main
+    from ktalk_cli.cli import main
 
     (tmp_path / ".ktalk.toml").write_text(
         '[routing]\nstandup = "20_MEETINGS/standups/{date}.md"\n', encoding="utf-8"
@@ -71,7 +71,7 @@ def test_config_show_undeclared_routing_key_absent_from_json_not_null(
 def test_config_show_malformed_config_nonzero_exit_and_stderr_names_file(
     tmp_path, monkeypatch, capsys
 ):
-    from ktalk_mcp.cli import main
+    from ktalk_cli.cli import main
 
     config_path = tmp_path / ".ktalk.toml"
     config_path.write_text("not valid toml [[[", encoding="utf-8")
@@ -87,7 +87,7 @@ def test_config_show_malformed_config_nonzero_exit_and_stderr_names_file(
 def test_config_show_is_registry_free_command_does_not_require_db(tmp_path, monkeypatch, capsys):
     """`config show` входит в `_REGISTRY_FREE_COMMANDS` — работает даже когда
     `--db` указывает на недоступный/несуществующий путь, реестр не открывается."""
-    from ktalk_mcp.cli import main
+    from ktalk_cli.cli import main
 
     monkeypatch.delenv("CLAUDE_PROJECT_DIR", raising=False)
     monkeypatch.chdir(tmp_path)
@@ -99,7 +99,7 @@ def test_config_show_is_registry_free_command_does_not_require_db(tmp_path, monk
 
 
 def test_config_show_human_readable_without_json_flag(tmp_path, monkeypatch, capsys):
-    from ktalk_mcp.cli import main
+    from ktalk_cli.cli import main
 
     monkeypatch.delenv("CLAUDE_PROJECT_DIR", raising=False)
     monkeypatch.chdir(tmp_path)

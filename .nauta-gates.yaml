@@ -55,7 +55,7 @@ promptLayerSizeBudget:
 # Снимается расщеплением класса, не поднятием потолка (ADR-032 Д7, ADR-018 Д5).
 # Путь repo-root-relative, "/"-separated, без ведущего "./".
 sizeBudgetGrandfathered:
-  - path: src/ktalk_mcp/registry.py
+  - path: src/ktalk_cli/registry.py
     ceiling: 562
 
   # Ниже — НЕ наш долг, а payload плагина nauta (`/nauta:sync-scripts`). C13 перечисляет

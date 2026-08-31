@@ -5,7 +5,7 @@
 блокирует боевую синхронизацию без осознанного решения оператора), AC-3 (полное
 совпадение -> обычная синхронизация может выполняться).
 
-Красные по замыслу: модуль `ktalk_mcp.reconciliation` (`compare_id_sets`) не существует;
+Красные по замыслу: модуль `ktalk_cli.reconciliation` (`compare_id_sets`) не существует;
 флаг `ktalk sync --dry-run` в этой (api-key-guard) роли не существует.
 
 ВАЖНО (флаг QA-author, не догадка Dev): требование не фиксирует, ЧЕРЕЗ ЧТО именно
@@ -32,7 +32,7 @@ _INSIDE_WINDOW = (date.today() - timedelta(days=1)).isoformat()
 def test_ac_fr15_1_compare_id_sets_full_match():
     """AC FR-15/1 (механика): совпадение id между api-key-ответом и реестром -> нет
     расхождений."""
-    from ktalk_mcp.reconciliation import compare_id_sets
+    from ktalk_cli.reconciliation import compare_id_sets
 
     fetched = ["A", "B", "C"]
     existing = ["A", "B", "C"]
@@ -45,7 +45,7 @@ def test_ac_fr15_1_compare_id_sets_full_match():
 
 def test_ac_fr15_1b_compare_id_sets_detects_mismatch():
     """AC FR-15/1 (механика): расхождение id -> обнаруживается явно по обеим сторонам."""
-    from ktalk_mcp.reconciliation import compare_id_sets
+    from ktalk_cli.reconciliation import compare_id_sets
 
     fetched = ["A", "B", "X"]
     existing = ["A", "B", "C"]
@@ -66,7 +66,7 @@ def test_ac_fr15_2_dry_run_mismatch_blocks_sync_without_confirmation(
     monkeypatch.delenv("KTALK_SESSION_TOKEN", raising=False)
     monkeypatch.delenv("KTALK_REGISTRY_DB", raising=False)
 
-    from ktalk_mcp.registry import Registry
+    from ktalk_cli.registry import Registry
 
     db = tmp_path / "r.db"
     with Registry(db) as reg:
@@ -86,7 +86,7 @@ def test_ac_fr15_2_dry_run_mismatch_blocks_sync_without_confirmation(
         }
     )
 
-    from ktalk_mcp.cli import main
+    from ktalk_cli.cli import main
 
     rc = main(["--db", str(db), "sync", "--days", "7", "--dry-run", "--json"])
     assert rc != 0
@@ -110,7 +110,7 @@ def test_ac_fr15_3_dry_run_full_match_allows_proceeding(
     monkeypatch.delenv("KTALK_SESSION_TOKEN", raising=False)
     monkeypatch.delenv("KTALK_REGISTRY_DB", raising=False)
 
-    from ktalk_mcp.registry import Registry
+    from ktalk_cli.registry import Registry
 
     db = tmp_path / "r.db"
     with Registry(db) as reg:
@@ -130,7 +130,7 @@ def test_ac_fr15_3_dry_run_full_match_allows_proceeding(
         }
     )
 
-    from ktalk_mcp.cli import main
+    from ktalk_cli.cli import main
 
     rc = main(["--db", str(db), "sync", "--days", "7", "--dry-run", "--json"])
     assert rc == 0
@@ -157,7 +157,7 @@ def test_dry_run_on_empty_registry_reports_no_data_not_silent_ok(
         }
     )
 
-    from ktalk_mcp.cli import main
+    from ktalk_cli.cli import main
 
     db = tmp_path / "r.db"
     rc = main(["--db", str(db), "sync", "--days", "7", "--dry-run", "--json"])
@@ -181,7 +181,7 @@ def test_dry_run_compares_same_window_not_whole_registry(
     monkeypatch.delenv("KTALK_SESSION_TOKEN", raising=False)
     monkeypatch.delenv("KTALK_REGISTRY_DB", raising=False)
 
-    from ktalk_mcp.registry import Registry
+    from ktalk_cli.registry import Registry
 
     long_ago = (date.today() - timedelta(days=300)).isoformat()
     db = tmp_path / "r.db"
@@ -207,7 +207,7 @@ def test_dry_run_compares_same_window_not_whole_registry(
         }
     )
 
-    from ktalk_mcp.cli import main
+    from ktalk_cli.cli import main
 
     rc = main(["--db", str(db), "sync", "--days", "7", "--dry-run", "--json"])
     assert rc == 0, "историческая запись вне окна не является расхождением"

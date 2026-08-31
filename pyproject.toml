@@ -1,14 +1,14 @@
 [project]
-name = "ktalk-mcp"
-version = "0.10.0"
-description = "MCP server for accessing Kontur Talk (KTalk) recordings, transcripts and summaries"
+name = "ktalk-cli"
+version = "1.0.0"
+description = "CLI for accessing Kontur Talk (KTalk) recordings, transcripts and summaries"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.12"
 authors = [
     { name = "Maksim Demyanov", email = "mdemyanov@users.noreply.github.com" },
 ]
-keywords = ["mcp", "ktalk", "kontur", "recordings", "transcripts"]
+keywords = ["cli", "ktalk", "kontur", "recordings", "transcripts"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
@@ -19,7 +19,6 @@ classifiers = [
     "Topic :: Communications :: Conferencing",
 ]
 dependencies = [
-    "fastmcp>=2.0.0",
     "httpx>=0.28.0",
     "pydantic-settings>=2.0.0",
 ]
@@ -30,12 +29,32 @@ Repository = "https://github.com/mdemyanov/ktalk-mcp"
 Issues = "https://github.com/mdemyanov/ktalk-mcp/issues"
 
 [project.scripts]
-ktalk-mcp = "ktalk_mcp.server:main"
-ktalk = "ktalk_mcp.cli:main"
+ktalk = "ktalk_cli.cli:main"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.sdist]
+# Состав sdist задан ЯВНО. Без этого блока hatchling кладёт в архив всё, что не
+# исключено .gitignore, — и на PyPI уезжало бы дерево разработки: 121 файл
+# content/ (ADR, роадмап, требования, журнал уроков), .beads/ со стором задач и
+# его бэкапами, внутренние гейты scripts/ и .githooks/, конфигурация агентов
+# .claude/.cursor/.codex/.agents и вендоренная спека API на 511 КБ. Проверено
+# сборкой перед первой публикацией ktalk-cli: sdist весил 1,5 МБ.
+# Публикация в индекс необратима (PEP 592: yank не удаляет), поэтому состав
+# перечисляется белым списком, а не чёрным: новый внутренний каталог не должен
+# попадать в архив по умолчанию.
+# Пути ЯКОРЕНЫ ведущим слешем: шаблон `README.md` в gitignore-синтаксисе
+# совпадает на любом уровне вложенности, и в архив попадал `.beads/README.md`
+# из стора задач. Поймано сборкой, не рассуждением.
+include = [
+  "/src/",
+  "/tests/",
+  "/README.md",
+  "/LICENSE",
+  "/pyproject.toml",
+]
 
 [dependency-groups]
 dev = [

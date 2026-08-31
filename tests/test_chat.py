@@ -34,7 +34,7 @@ async def test_ac_fr10_2_missing_channel_resolves_available_channels_first(
 ):
     """AC FR-10/2: канал не указан явно -> клиент сначала определяет доступные каналы
     (из деталей встречи), а не падает с сырым 400 "The channel field is required"."""
-    from ktalk_mcp.client import KTalkClient
+    from ktalk_cli.client import KTalkClient
 
     httpx_mock.add_response(
         json={"key": "CONF-1", "artifacts": {"chatChannelHasMessages": {"general": True}}}
@@ -54,7 +54,7 @@ async def test_get_chat_messages_resolves_conference_key_from_recording_key(
 ):
     """Оркестрация из client-modules-spec: recording_key -> резолв conferenceKey (мост
     Запись -> Встреча, зонд Ф-5) -> резолв канала -> сообщения."""
-    from ktalk_mcp.client import KTalkClient
+    from ktalk_cli.client import KTalkClient
 
     httpx_mock.add_response(json={"id": "REC-1", "conferenceKey": "CONF-1"})
     httpx_mock.add_response(
@@ -73,7 +73,7 @@ async def test_ac_fr10_4_forbidden_channel_gives_readable_permission_message(
 ):
     """AC FR-10/4: 403 с текстом "нет прав на получение сообщений чат-канала X" (зонд
     Ф-6) -> понятное сообщение о нехватке прав на конкретный канал."""
-    from ktalk_mcp.client import KTalkClient
+    from ktalk_cli.client import KTalkClient
 
     httpx_mock.add_response(
         status_code=403, text="У вас нет прав на получение сообщений чат-канала vip"

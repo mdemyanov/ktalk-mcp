@@ -6,9 +6,9 @@
 пустая последняя страница vs короткая-но-непустая, nextPageToken: null vs отсутствующее
 поле, полная последняя страница -> один лишний запрос по дизайну.
 
-Красные по замыслу: `ktalk_mcp.pagination` (модуль ещё не существует), клэмп top<=100 в
+Красные по замыслу: `ktalk_cli.pagination` (модуль ещё не существует), клэмп top<=100 в
 `_fetch_recordings`/`ktalk sync`, `client.list_archive(...)`, нормализаторы
-`normalize_list_session`/`normalize_list_apikey` в `ktalk_mcp.client`.
+`normalize_list_session`/`normalize_list_apikey` в `ktalk_cli.client`.
 
 Примечание об импортах: сигнатура `skip_pages(fetch, page_size)` в тесте
 `test_skip_pages_full_last_page_makes_one_extra_request` — рабочая гипотеза по
@@ -45,7 +45,7 @@ def base_url():
 
 async def test_paginate_pages_empty_first_page_returns_zero_pages():
     """Boundary: 0 записей в окне -> paginate_pages не должен упасть, вернуть 0 страниц."""
-    from ktalk_mcp.pagination import paginate_pages
+    from ktalk_cli.pagination import paginate_pages
 
     calls = []
 
@@ -60,7 +60,7 @@ async def test_paginate_pages_empty_first_page_returns_zero_pages():
 
 async def test_paginate_pages_stops_on_falsy_cursor_after_yielding_items():
     """Условие остановки — items пуст ИЛИ next_cursor ложный, оба варианта проверяются."""
-    from ktalk_mcp.pagination import paginate_pages
+    from ktalk_cli.pagination import paginate_pages
 
     async def fetch_page(cursor):
         if cursor is None:
@@ -76,7 +76,7 @@ async def test_skip_pages_full_last_page_makes_one_extra_empty_request():
     странице -> адаптер skip_pages делает ОДИН лишний запрос (страница пустая), по
     дизайну — тест подтверждает, что лишний запрос происходит и цикл корректно
     завершается (не бесконечный, не off-by-one)."""
-    from ktalk_mcp.pagination import paginate_pages, skip_pages
+    from ktalk_cli.pagination import paginate_pages, skip_pages
 
     calls = []
 
@@ -107,7 +107,7 @@ def test_ac_fr14_1_sync_never_sends_top_over_100(
     monkeypatch.delenv("KTALK_REGISTRY_DB", raising=False)
     httpx_mock.add_response(json={"recordings": []})
 
-    from ktalk_mcp.cli import main
+    from ktalk_cli.cli import main
 
     db = tmp_path / "r.db"
     rc = main(["--db", str(db), "sync", "--days", "7", "--json"])
@@ -142,7 +142,7 @@ def test_ac_fr14_2_skip_pagination_continues_past_first_page_to_empty(
     httpx_mock.add_response(json=full_page)
     httpx_mock.add_response(json={"recordings": []})
 
-    from ktalk_mcp.cli import main
+    from ktalk_cli.cli import main
 
     db = tmp_path / "r.db"
     rc = main(["--db", str(db), "sync", "--days", "7", "--json"])
@@ -151,7 +151,7 @@ def test_ac_fr14_2_skip_pagination_continues_past_first_page_to_empty(
     requests = httpx_mock.get_requests()
     assert len(requests) == 2  # полная страница + завершающая пустая
 
-    from ktalk_mcp.registry import Registry
+    from ktalk_cli.registry import Registry
 
     with Registry(db) as reg:
         assert len(reg.list_recordings()) == 100
@@ -183,13 +183,13 @@ def test_ac_fr14_3_sync_window_over_100_records_all_present_in_registry(
     httpx_mock.add_response(json=_page(200, 50))
     httpx_mock.add_response(json={"recordings": []})
 
-    from ktalk_mcp.cli import main
+    from ktalk_cli.cli import main
 
     db = tmp_path / "r.db"
     rc = main(["--db", str(db), "sync", "--days", "7", "--json"])
     assert rc == 0
 
-    from ktalk_mcp.registry import Registry
+    from ktalk_cli.registry import Registry
 
     with Registry(db) as reg:
         assert len(reg.list_recordings()) == 250
@@ -204,7 +204,7 @@ async def test_ac_fr9_2_archive_reads_beyond_single_page(httpx_mock: HTTPXMock, 
     httpx_mock.add_response(json=_fixture_json("archive-page1.json"))
     httpx_mock.add_response(json=_fixture_json("archive-page2-empty.json"))
 
-    from ktalk_mcp.client import KTalkClient
+    from ktalk_cli.client import KTalkClient
 
     async with KTalkClient(base_url=base_url, personal_api_key="pk-1") as client:
         meetings = await client.list_archive(from_date="2026-07-01", to_date="2026-07-02")
@@ -219,7 +219,7 @@ async def test_ac_fr9_2_archive_reads_beyond_single_page(httpx_mock: HTTPXMock, 
 def test_normalize_list_session_sets_cursor_on_full_page():
     """session-форма {"recordings": [...]} без токена страницы: полная страница (len==top)
     -> есть курсор продолжения (не полагается на отсутствующее поле)."""
-    from ktalk_mcp.client import normalize_list_session
+    from ktalk_cli.client import normalize_list_session
 
     raw = {"recordings": [{"id": "a"}, {"id": "b"}]}
     page = normalize_list_session(raw, skip=0, top=2)
@@ -230,7 +230,7 @@ def test_normalize_list_session_sets_cursor_on_full_page():
 
 def test_normalize_list_session_no_cursor_on_short_page():
     """Короткая (не полная) страница -> последняя, курсора нет."""
-    from ktalk_mcp.client import normalize_list_session
+    from ktalk_cli.client import normalize_list_session
 
     raw = {"recordings": [{"id": "a"}]}
     page = normalize_list_session(raw, skip=0, top=2)
@@ -240,7 +240,7 @@ def test_normalize_list_session_no_cursor_on_short_page():
 
 def test_normalize_list_session_no_cursor_on_empty_page():
     """Пустая страница (0 записей) — тоже последняя, отдельно от «короткой»."""
-    from ktalk_mcp.client import normalize_list_session
+    from ktalk_cli.client import normalize_list_session
 
     page = normalize_list_session({"recordings": []}, skip=200, top=100)
     assert page.items == []
@@ -249,7 +249,7 @@ def test_normalize_list_session_no_cursor_on_empty_page():
 
 def test_normalize_list_apikey_cursor_from_next_page_token():
     """api-key-форма {"entities": [...], "nextPageToken": ...} -> курсор из токена."""
-    from ktalk_mcp.client import normalize_list_apikey
+    from ktalk_cli.client import normalize_list_apikey
 
     raw = {"entities": [{"id": "a"}], "nextPageToken": "tok-2"}
     page = normalize_list_apikey(raw)
@@ -268,7 +268,7 @@ def test_normalize_list_apikey_cursor_from_next_page_token():
 def test_normalize_list_apikey_no_cursor_when_token_null_or_absent(raw):
     """nextPageToken: null явно в JSON против отсутствующего поля вовсе — оба варианта
     эквивалентны «последняя страница»."""
-    from ktalk_mcp.client import normalize_list_apikey
+    from ktalk_cli.client import normalize_list_apikey
 
     page = normalize_list_apikey(raw)
     assert page.cursor is None
@@ -278,7 +278,7 @@ def test_normalize_list_apikey_no_cursor_when_token_null_or_absent(raw):
 
 
 def test_clip_to_window_keeps_records_inside_window():
-    from ktalk_mcp.pagination import clip_to_window
+    from ktalk_cli.pagination import clip_to_window
 
     items = [
         {"id": "a", "createdDate": "2026-08-13T10:00:00Z"},
@@ -290,7 +290,7 @@ def test_clip_to_window_keeps_records_inside_window():
 
 
 def test_clip_to_window_drops_older_and_signals_exhausted():
-    from ktalk_mcp.pagination import clip_to_window
+    from ktalk_cli.pagination import clip_to_window
 
     items = [
         {"id": "a", "createdDate": "2026-08-13T10:00:00Z"},
@@ -303,7 +303,7 @@ def test_clip_to_window_drops_older_and_signals_exhausted():
 
 def test_clip_to_window_keeps_records_without_date():
     """Пустая дата — неизвестность, а не «старая запись»: молча терять нельзя."""
-    from ktalk_mcp.pagination import clip_to_window
+    from ktalk_cli.pagination import clip_to_window
 
     kept, exhausted = clip_to_window([{"id": "x", "createdDate": ""}], "2026-07-14")
     assert [i["id"] for i in kept] == ["x"]
@@ -311,7 +311,7 @@ def test_clip_to_window_keeps_records_without_date():
 
 
 def test_clip_to_window_without_start_from_is_passthrough():
-    from ktalk_mcp.pagination import clip_to_window
+    from ktalk_cli.pagination import clip_to_window
 
     items = [{"id": "a", "createdDate": "2020-01-01T00:00:00Z"}]
     assert clip_to_window(items, None) == (items, False)
@@ -347,14 +347,14 @@ def test_sync_stops_paginating_once_window_exhausted(tmp_path, capsys, monkeypat
     # Третьей страницы быть не должно: если код её запросит, pytest_httpx
     # упадёт на отсутствии зарегистрированного ответа.
 
-    from ktalk_mcp.cli import main
+    from ktalk_cli.cli import main
 
     rc = main(["--db", str(tmp_path / "r.db"), "sync", "--days", "7", "--json"])
     assert rc == 0
     out = json.loads(capsys.readouterr().out)
     assert out["synced"] == 1, "в реестр обязана попасть только запись внутри окна"
 
-    from ktalk_mcp.registry import Registry
+    from ktalk_cli.registry import Registry
 
     with Registry(tmp_path / "r.db") as reg:
         assert [r["recording_id"] for r in reg.list_recordings()] == ["in-1"]
