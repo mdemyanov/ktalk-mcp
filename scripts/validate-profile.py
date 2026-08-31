@@ -8,7 +8,20 @@
 """validate-profile.py — валидатор manifest'ов профилей.
 
 Проверяет docs/overlays/profiles/*/manifest.yaml на соответствие schema (M1-M10).
-Exit codes: 0 — clean; 1 — есть errors; 2 — pyyaml не установлен.
+
+Exit codes (ADR-041 Д5 — «предмета нет» отделено от «ошибки вызова», долг Д-2 §7
+ADR-043-spec):
+  0 — проверка выполнена, нарушений нет (в т.ч. каталог есть и пуст — «профилей нет»);
+  1 — есть errors ЛИБО умолчания `docs/overlays/profiles/` нет («не смог проверить», У-4);
+  2 — pyyaml не установлен ЛИБО путь НАЗВАН аргументом и каталогом не является (адрес дал
+      вызывающий — его опечатка, а не состояние дерева).
+
+До этой правки отсутствие умолчания давало 2, а названный вызывающим несуществующий путь —
+1 (через M1 «manifest.yaml not found»), то есть коды стояли ровно наоборот. Замер DEV-026 до
+правки: `cd $(mktemp -d); uv run scripts/validate-profile.py` → `ERROR: docs/overlays/profiles
+не существует`, EXIT=2. Носитель предмета (`docs/overlays/profiles/.gitkeep`) доставляется
+`bin/deliver.sh` 17-й позицией всегда (§4 ADR-043-spec), поэтому его отсутствие у потребителя —
+не «нормальная конфигурация», а порча доставки, и она обязана быть громкой.
 """
 from __future__ import annotations
 
@@ -36,6 +49,17 @@ SECTION_HEADING_RE = _re.compile(r"^## (.+)$", _re.MULTILINE)
 
 PROFILES_ROOT_DEFAULT = Path("docs/overlays/profiles")
 
+# У-4 (ADR-043 Д3): предмета нет, отказ не объявлен. Маркер — ровно в одной строке записи
+# (Д3 ADR-042), продолжение несёт починку: молчание третьим вариантом не является.
+SUBJECT_MISSING_MESSAGE = (
+    f"ERROR: не смог проверить — каталога {PROFILES_ROOT_DEFAULT}/ в этом дереве нет, а он "
+    "доставляется всегда.\n"
+    "  Носитель — docs/overlays/profiles/.gitkeep, 17-я позиция bin/deliver.sh (ADR-043 Д2):\n"
+    "  отсутствие каталога означает порчу доставки, а не «профилей нет» (пустой каталог — это\n"
+    "  отдельный исход, exit 0). Почини: повтори /nauta:sync-scripts либо bin/deliver.sh в это\n"
+    "  дерево. Проверка профилей сейчас не выполнена ни одна."
+)
+
 
 def _resolve_plugin_slug(repo_root: Path = Path(".")) -> str:
     """Resolve current plugin slug. Precedence: env PLUGIN_SLUG > marketplace.json > 'project'.
@@ -55,6 +79,29 @@ def _resolve_plugin_slug(repo_root: Path = Path(".")) -> str:
         except (ValueError, KeyError, IndexError):
             pass
     return "project"
+
+
+def resolve_plugin_registry_dir(repo_root: Path, relative: str) -> Path | None:
+    """Двухадресный резолв реестра плагина: `agents/`, `commands/pipelines/` (ADR-047 Д5).
+
+    Порядок — дерево плагина первым (`repo_root/relative`), установленный плагин вторым
+    (`repo_root/.claude/plugins/<slug>/relative`). Основание: этот валидатор запускается
+    прежде всего внутри дерева самого плагина `nauta` (`docs/overlays/profiles/` — предмет
+    ADR-047, доставки в потребителя нет, Д6), где `agents/` и `commands/pipelines/` лежат в
+    корне по построению; адрес потребителя — запасной для дерева, где плагин установлен как
+    зависимость. Оба адреса недостижимы → `None` = «не смог проверить» (ADR-007 Д1), НЕ
+    «реестр пуст»: пустое множество красило бы все манифесты, объявляющие роли/pipelines,
+    ложными нарушениями (SA-032 замер: этой веткой раньше отличались только M5 warning
+    от M11 error на одну и ту же причину — расхождение снято, оба класса дают warning).
+    """
+    candidates = (
+        repo_root / relative,
+        repo_root / ".claude" / "plugins" / _resolve_plugin_slug(repo_root) / relative,
+    )
+    for candidate in candidates:
+        if candidate.is_dir():
+            return candidate
+    return None
 
 
 def check_m1_manifest_present(profile_dir: Path) -> list[Issue]:
@@ -148,18 +195,22 @@ def check_m3_name_matches_dir(profile_dir: Path, manifest: dict) -> list[Issue]:
 
 
 def collect_known_roles(repo_root: Path) -> tuple[set[str], list[Issue]]:
-    """Парсит AGENTS.md таблицу 'Каталог ролей'.
+    """Парсит AGENTS.md таблицу 'Каталог ролей' / 'Role catalogue'.
 
     Returns (roles, issues). Issues содержит warning если AGENTS.md exists,
-    но '## Каталог ролей' heading не парсится — это сигнал поломанного anchor'а
-    (M4 silently skipping — раньше было).
+    но заголовок не парсится ни в одном из двух написаний — это сигнал
+    поломанного anchor'а (M4 silently skipping — раньше было).
+
+    Двуязычная ветка (DEV-061, ADR-049 Д1/Д4): AGENTS.md переведён на английский,
+    но у потребителя на диске может лежать прежняя русская версия — оба написания
+    заголовка принимаются, пока русскую ветку не снимет DEV-062.
     """
     agents_md = repo_root / "AGENTS.md"
     issues: list[Issue] = []
     if not agents_md.exists():
         return set(), issues  # M4 skipped silently — это OK, AGENTS.md просто нет
     text = agents_md.read_text(encoding="utf-8")
-    match = _re.search(r"##\s*Каталог ролей\s*\n(.*?)(?=\n##|\Z)", text, _re.DOTALL)
+    match = _re.search(r"##\s*(?:Каталог ролей|Role catalogue)\s*\n(.*?)(?=\n##|\Z)", text, _re.DOTALL)
     if not match:
         # A3: эмит warning — heading anchor сломан, M4 не работает
         issues.append(Issue(
@@ -209,14 +260,13 @@ def check_m4_subagent_names(profile_dir: Path, manifest: dict, known_roles: set[
 def collect_known_pipelines(repo_root: Path) -> set[str] | None:
     """Множество pipeline names из commands/pipelines/*.md, либо None -- «не смог проверить».
 
-    Шаг 4 PT-EPIC-14 снял локальную копию плагина, а `commands/pipelines/` живёт в `nauta`,
-    до которого валидатор не дотягивается (кэш плагина -- не путь репозитория). Пустое
-    множество здесь означало бы «ни один pipeline не существует» и красило бы все семь
-    профилей, объявляющих pipelines: три исхода вместо двух, ADR-007 Д1 -- «не смог
-    проверить» отличается от «проверил, чисто».
+    Двухадресный резолв (ADR-047 Д5) — см. resolve_plugin_registry_dir. Пустое множество
+    здесь означало бы «ни один pipeline не существует» и красило бы все семь профилей,
+    объявляющих pipelines: три исхода вместо двух, ADR-007 Д1 -- «не смог проверить»
+    отличается от «проверил, чисто».
     """
-    pipelines_dir = repo_root / ".claude" / "plugins" / _resolve_plugin_slug(repo_root) / "commands" / "pipelines"
-    if not pipelines_dir.is_dir():
+    pipelines_dir = resolve_plugin_registry_dir(repo_root, "commands/pipelines")
+    if pipelines_dir is None:
         return None
     return {p.stem for p in pipelines_dir.glob("*.md")}
 
@@ -424,9 +474,25 @@ def check_m11_overrides(profile_dir: Path, manifest: dict, repo_root: Path) -> l
     overrides = manifest.get("agent_overrides") or {}
     if not isinstance(overrides, dict):
         return issues
-    base_dir = repo_root / ".claude" / "plugins" / _resolve_plugin_slug(repo_root) / "agents"
     manifest_path = str(profile_dir / "manifest.yaml")
     subagents = manifest.get("subagents") or {}
+
+    base_dir = resolve_plugin_registry_dir(repo_root, "agents")
+    if base_dir is None:
+        # Оба адреса недостижимы -- то же «не смог проверить», что у M5 (ADR-007 Д1,
+        # ADR-047 Д5): раньше эта ветка молча печатала error M11.1 на каждый override,
+        # хотя причина -- недостижимость реестра, не нарушение нормы. Один warning на
+        # все объявленные overrides, не N errors по числу ролей.
+        if not overrides:
+            return issues
+        return [Issue(
+            level="warning",
+            path=manifest_path,
+            message=(f"M11 не выполнена: реестр базовых промтов недостижим "
+                     f"(`agents/` живёт в дереве плагина, ни там, ни в "
+                     f".claude/plugins/<slug>/agents/ не найден) -- overrides "
+                     f"{sorted(overrides)} НЕ проверены, это не «0 нарушений»"),
+        )]
 
     for role, override_spec in overrides.items():
         # M11.1: base exists
@@ -590,12 +656,18 @@ def main(argv: list[str]) -> int:
 
     require_yaml()
 
+    # Д5 ADR-041, второй гейт: адрес, названный вызывающим, и умолчание — разные исходы.
     if args.profile_dir:
-        profile_dirs = [Path(args.profile_dir)]
+        named = Path(args.profile_dir)
+        if not named.is_dir():
+            print(f"ERROR: not a directory: {named}", file=sys.stderr)
+            return 2
+        profile_dirs = [named]
     else:
         if not PROFILES_ROOT_DEFAULT.is_dir():
-            print(f"ERROR: {PROFILES_ROOT_DEFAULT} не существует", file=sys.stderr)
-            return 2
+            print(SUBJECT_MISSING_MESSAGE, file=sys.stderr)
+            print("\nErrors: 1 | Warnings: 0")
+            return 1
         profile_dirs = sorted(p for p in PROFILES_ROOT_DEFAULT.iterdir() if p.is_dir())
 
     if not profile_dirs:

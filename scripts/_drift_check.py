@@ -338,6 +338,20 @@ def _main(argv: list[str]) -> int:
     # --zones-manifest — отдельная ветка (ADR-010 Д3, spec §2): читает docs/zones.yaml,
     # строит drift_pairs из derived-зон и передаёт check_drift() без изменения сигнатуры.
     # Возвращается независимо от манифест/doc-root резолва ниже — флаги взаимоисключимы.
+    #
+    # DEV-037 (NA-EPIC-13, Q6 волны, owner-решение — то же «назвать мёртвое мёртвым»,
+    # ничего не удаляя): у этой ветки НЕТ вызывающего в этом дереве, замер 2026-08-18 —
+    #   grep -n '_drift_check' commands/pm-review.md
+    # `/nauta:pm-review` зовёт этот скрипт единственный раз, ЧЕРЕЗ ДРУГУЮ ветку
+    # (`--doc-root content/.doc-root.yaml --profiles-dir docs/overlays/profiles`, раздел
+    # «Drift-check» pm-review.md), не `--zones-manifest`. `docs/zones.yaml` — карта зон
+    # архива `project_template` — в этом дереве отсутствует (`find . -name zones.yaml` →
+    # пусто); архивные потребители (`publish-public.sh`, `test-examples-sync.sh`) не
+    # перенеслись (content/lessons-learned.md, запись 2026-07-28 PT-EPIC-15). pm-review.md
+    # шаг «Ревизия зон» деградирует явно при отсутствии файла (advisory, merge не блокирует)
+    # — код НЕ снят: снятие сломало бы потребителя, у которого docs/zones.yaml когда-нибудь
+    # появится (roadmap.md, открытый пункт 5/6). Регрессия записи —
+    # tests/test_dev037_dead_payload_provenance.py.
     if args.zones_manifest:
         zones_path = Path(args.zones_manifest)
         # Существование проверяется ЯВНО, как у --manifest (ADR-010 spec §2): путь называет

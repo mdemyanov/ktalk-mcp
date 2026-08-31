@@ -5,4 +5,4 @@ title: Проект
 Планирование и зафиксированные решения.
 
 - [roadmap.md](roadmap.md) — фазы и текущее состояние
-- [adr/](adr/) — architecture decision records
+- [adr/](adr/_index.md) — architecture decision records

@@ -10,11 +10,11 @@ CLI-реестр на SQLite). Здесь живёт ответ на вопро�
 
 | Раздел | Что внутри | Кто пишет |
 |--------|-----------|-----------|
-| [00-project/](00-project/) | Roadmap, ADR | PM, SA |
-| [10-domain/](10-domain/) | Исследования предметной области и API Толка | Researcher |
-| [30-requirements/](30-requirements/) | Требования и acceptance-критерии | BA |
-| [40-architecture/](40-architecture/) | Архитектурные спеки к ADR, контракты | SA |
-| [60-implementation/](60-implementation/) | Заметки об особенностях реализации | Dev |
+| [00-project/](00-project/_index.md) | Roadmap, ADR | PM, SA |
+| [10-domain/](10-domain/_index.md) | Исследования предметной области и API Толка | Researcher |
+| [30-requirements/](30-requirements/_index.md) | Требования и acceptance-критерии | BA |
+| [40-architecture/](40-architecture/_index.md) | Архитектурные спеки к ADR, контракты | SA |
+| [60-implementation/](60-implementation/_index.md) | Заметки об особенностях реализации | Dev |
 | [lessons-learned.md](lessons-learned.md) | Append-only журнал уроков | все роли |
 
 ## Что сюда не кладём

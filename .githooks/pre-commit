@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Git pre-commit hook — запускает scripts/check.sh --fast.
+# Git pre-commit hook — сканирует staged-diff на секреты (ADR-040 Д1, secret-hygiene-gate),
+# затем запускает scripts/check.sh --fast.
 # Активация: bash scripts/install-hooks.sh (или git config core.hooksPath .githooks)
 # Bypass: git commit --no-verify
 
@@ -8,9 +9,147 @@ set -e
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 cd "$REPO_ROOT"
 
+# --- secret scan, staged diff (ADR-040-spec §1.3/§4) — ДО check.sh, вставка идёт ВЫШЕ exec
+# ниже (замер: пустой commit git не создаёт вовсе — "нечего проверять", не "чисто"; отдельный
+# вызов из CI по пустому индексу не должен выглядеть как успешное сканирование, §8 edge case).
+#
+# Провенанс нормы (У-5 ADR-043 Д3, прецедент `limit_source: default` ADR-036 Д3): значения
+# enabled/binary при отсутствии ключа `secretScan` берутся ИЗ КОДА, и хук обязан назвать не
+# только использованное значение, но и его происхождение. Строка печатается ДО сканирования —
+# на упавшем сканере её иначе не увидеть.
+GATES_FILE="$REPO_ROOT/.nauta-gates.yaml"
+SECRET_SCAN_ENABLED=true
+SECRET_SCAN_BINARY=gitleaks
+SECRET_SCAN_SOURCE="default (умолчание в коде .githooks/pre-commit; ключ secretScan в .nauta-gates.yaml не задан)"
+if [[ -f "$GATES_FILE" ]]; then
+  # Строгое значение (ADR-072 Д6, решение владельца Р3). awk печатает СТРОКУ-ПРИЗНАК
+  # `enabled=<значение>` всегда, когда ключ НАЙДЕН, — иначе «ключа нет» и «ключ задан,
+  # значение пустое» неразличимы: сегодня оба давали умолчание, и второй печатал ложный
+  # провенанс `default` при ЗАДАННОМ ключе (замер §5 спутника ADR-072).
+  _v="$(awk '
+    /^secretScan:[ \t]*(#.*)?$/ { inblk=1; next }
+    inblk && $0 ~ /^[^ \t]/ { inblk=0 }
+    inblk && $0 ~ /^[ \t]*enabled:/ {
+      line=$0; sub(/^[ \t]*enabled:[ \t]*/, "", line)
+      gsub(/[ \t]+$/, "", line); gsub(/^"/, "", line); gsub(/"$/, "", line)
+      print "enabled=" line; exit
+    }
+  ' "$GATES_FILE")"
+  if [[ -n "$_v" ]]; then
+    _v="${_v#enabled=}"
+    # Признаются РОВНО два написания. `True`, `yes`, `on` — корректная YAML-истина
+    # (python3 -c "import yaml; yaml.safe_load('yes')" → True), которую awk-читатель молча
+    # превращал в «не true» и выключал самый дорогой гейт дерева; `flase` — опечатка того
+    # же класса исхода. Отказ, а не умолчание: ADR-007 Д1 — «не смог прочитать» ≠
+    # «нарушений нет».
+    if [[ "$_v" != "true" && "$_v" != "false" ]]; then
+      echo "ERROR: secretScan.enabled в .nauta-gates.yaml задан значением '$_v' — признаются" >&2
+      echo "ровно 'true' и 'false'. Сканирование секретов staged-diff НЕ выполнено, commit" >&2
+      echo "заблокирован: это не \"нет находок\" (ADR-007 Д1, ADR-072 Д6). Ключ задан, значит" >&2
+      echo "умолчание из кода здесь неприменимо — оно принадлежит только отсутствующему ключу." >&2
+      echo "Почини: впиши 'enabled: true' или 'enabled: false' (YAML-истины 'True'/'yes'/'on'" >&2
+      echo "здесь НЕ синонимы 'true'), либо убери ключ secretScan целиком." >&2
+      exit 1
+    fi
+    SECRET_SCAN_ENABLED="$_v"
+    SECRET_SCAN_SOURCE="configured (.nauta-gates.yaml, ключ secretScan)"
+  fi
+  _b="$(awk '
+    /^secretScan:[ \t]*(#.*)?$/ { inblk=1; next }
+    inblk && $0 ~ /^[^ \t]/ { inblk=0 }
+    inblk && $0 ~ /^[ \t]*binary:/ {
+      line=$0; sub(/^[ \t]*binary:[ \t]*/, "", line)
+      gsub(/[ \t]+$/, "", line); gsub(/^"/, "", line); gsub(/"$/, "", line)
+      print line; exit
+    }
+  ' "$GATES_FILE")"
+  if [[ -n "$_b" ]]; then
+    SECRET_SCAN_BINARY="$_b"
+    SECRET_SCAN_SOURCE="configured (.nauta-gates.yaml, ключ secretScan)"
+  fi
+fi
+
+echo "секретное сканирование (secretScan): enabled=$SECRET_SCAN_ENABLED, binary=$SECRET_SCAN_BINARY — норма: $SECRET_SCAN_SOURCE"
+
+if [[ "$SECRET_SCAN_ENABLED" == "true" ]]; then
+  if ! command -v "$SECRET_SCAN_BINARY" >/dev/null 2>&1; then
+    echo "ERROR: '$SECRET_SCAN_BINARY' не найден в PATH — сканирование секретов staged-diff не" >&2
+    echo "выполнено, commit заблокирован (это НЕ \"нет находок\" — ADR-007 Д1). Установи:" >&2
+    echo "brew install gitleaks (замер §1.1 ADR-040-spec)." >&2
+    exit 1
+  fi
+  if ! "$SECRET_SCAN_BINARY" git --staged --redact --no-banner -v . 2>&1; then
+    echo "ERROR: secret-hygiene-gate — commit заблокирован (см. находки $SECRET_SCAN_BINARY выше)." >&2
+    exit 1
+  fi
+fi
+
 if [[ ! -f scripts/check.sh ]]; then
   echo "WARNING: scripts/check.sh не найден; pre-commit skipped" >&2
   exit 0
 fi
+
+# Врезка beads (bd) — дословная копия блока из .beads/hooks/pre-commit (core.hooksPath
+# этого репозитория). Причина места именно здесь: beads — последним перед exec, чтобы
+# гейт секретов и check.sh отработали первыми. Эта врезка — причина, по которой путь
+# .githooks/pre-commit стоит в skip: .nauta-scripts-basis.yaml.
+# --- BEGIN BEADS INTEGRATION v1.2.1 ---
+# This section is managed by beads. Do not remove these markers.
+if command -v bd >/dev/null 2>&1; then
+  export BD_GIT_HOOK=1
+  _bd_timeout=${BEADS_HOOK_TIMEOUT:-300}
+  case "$_bd_timeout" in
+    *[!0-9]*|'') _bd_timeout_invalid=1 ;;
+    *[1-9]*) _bd_timeout_invalid=0 ;;
+    *) _bd_timeout_invalid=1 ;;
+  esac
+  if [ "$_bd_timeout_invalid" -eq 1 ]; then
+    echo >&2 "beads: invalid BEADS_HOOK_TIMEOUT; using 300 seconds"
+    _bd_timeout=300
+  fi
+  _bd_timeout_backend=none
+  _bd_timeout_command=
+  for _bd_timeout_candidate in timeout gtimeout; do
+    if command -v "$_bd_timeout_candidate" >/dev/null 2>&1; then
+      if _bd_timeout_version="$("$_bd_timeout_candidate" --version 2>/dev/null)"; then
+        case "$_bd_timeout_version" in
+          "timeout (GNU coreutils) "*) _bd_timeout_command=$_bd_timeout_candidate; break ;;
+        esac
+      fi
+    fi
+  done
+  if [ -n "$_bd_timeout_command" ]; then
+    _bd_timeout_backend=coreutils
+    if "$_bd_timeout_command" -- "$_bd_timeout" bd hooks run pre-commit "$@"; then
+      _bd_exit=0
+    else
+      _bd_exit=$?
+    fi
+  elif command -v perl >/dev/null 2>&1; then
+    _bd_timeout_backend=perl
+    if perl -e 'alarm shift; exec @ARGV' -- "$_bd_timeout" bd hooks run pre-commit "$@"; then
+      _bd_exit=0
+    else
+      _bd_exit=$?
+    fi
+  else
+    echo >&2 "beads: hook 'pre-commit' running without timeout; install coreutils or perl to enable BEADS_HOOK_TIMEOUT"
+    if bd hooks run pre-commit "$@"; then
+      _bd_exit=0
+    else
+      _bd_exit=$?
+    fi
+  fi
+  if { [ "$_bd_timeout_backend" = coreutils ] && [ "$_bd_exit" -eq 124 ]; } || { [ "$_bd_timeout_backend" = perl ] && [ "$_bd_exit" -eq 142 ]; }; then
+    echo >&2 "beads: hook 'pre-commit' timed out after ${_bd_timeout}s — continuing without beads"
+    _bd_exit=0
+  fi
+  if [ "$_bd_exit" -eq 3 ]; then
+    echo >&2 "beads: database not initialized — skipping hook 'pre-commit'"
+    _bd_exit=0
+  fi
+  if [ "$_bd_exit" -ne 0 ]; then exit "$_bd_exit"; fi
+fi
+# --- END BEADS INTEGRATION v1.2.1 ---
 
 exec bash scripts/check.sh --fast
