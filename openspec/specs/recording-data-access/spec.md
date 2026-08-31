@@ -15,8 +15,17 @@ The client SHALL stream the recording file to the target path without buffering 
 memory. The quality name SHALL be normalized (case-insensitive, whitespace-insensitive) before
 being matched or placed in a request URL, because the two data sources disagree on spelling
 (`900p` without a space in session-mode data, `900 p` with a space in the api-key path template).
-A quality absent from the recording's available list SHALL be rejected with the list of available
-qualities, not an unhandled exception. An existing target file SHALL NOT be silently overwritten.
+In session mode, a quality absent from the recording's available list SHALL be rejected with the
+list of available qualities, not an unhandled exception. An existing target file SHALL NOT be
+silently overwritten.
+
+**Known limitation, scoped by design (not a defect):** in api-key mode, the recording-detail
+response (`TalkDomainConferenceRecording`) carries no `qualities[]` field at all — there is no
+list on this API surface to validate the requested quality against. The requested quality is
+therefore used as-is and passed straight to the request URL; a wrong value surfaces as whatever
+the raw network response returns, not as a curated `QualityNotFoundError`. This is an accepted
+scope boundary for this wave, pending SA confirmation of whether a future API surface exposes an
+api-key-mode quality list — it is not an oversight to silently work around.
 
 #### Scenario: Quality-name spelling mismatch does not break the URL
 
@@ -25,11 +34,19 @@ qualities, not an unhandled exception. An existing target file SHALL NOT be sile
 - **THEN** the client SHALL normalize it before building the request, and the request SHALL
   succeed structurally (no `InvalidURL` from an unescaped space)
 
-#### Scenario: Requesting an unavailable quality names the available ones
+#### Scenario: Requesting an unavailable quality names the available ones, in session mode
 
-- **WHEN** the requested quality is not among the recording's available qualities
+- **WHEN**, in session mode, the requested quality is not among the recording's available
+  qualities
 - **THEN** the client SHALL raise an error listing the qualities that are actually available,
   not an unhandled exception
+
+#### Scenario: Api-key mode passes the requested quality through unvalidated
+
+- **WHEN**, in api-key mode, a download is requested with any quality name
+- **THEN** the client SHALL NOT attempt to validate it against a list (none is available on this
+  API surface) — it SHALL send the request with that quality as given, not raise a curated
+  "unavailable quality" error
 
 #### Scenario: Download is streamed, not buffered whole
 

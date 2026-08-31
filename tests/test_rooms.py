@@ -109,12 +109,16 @@ async def test_ac_fr17_3_get_room_apikey_mode_refuses_before_network_call(
     httpx_mock: HTTPXMock, base_url, personal_api_key
 ):
     """AC FR-17/3: api-key-режим без подтверждённого профиля -> отказ до сетевого
-    вызова, а не запрос вслепую (ADR-004 п.2: `AuthMode.API_KEY: None` для `get_room`)."""
+    вызова, а не запрос вслепую (ADR-004 п.2: `AuthMode.API_KEY: None` для `get_room`).
+
+    Code review (epic-capability-pairing, Р1/Р2): `get_room` подтверждён только под
+    session (`endpoints.py`) — сообщение обязано советовать включить именно сессию,
+    не ключ, которым пользователь уже пользуется."""
     from ktalk_mcp.client import KTalkClient, OperationNotAvailableError
     from ktalk_mcp.rooms import get_room
 
     async with KTalkClient(base_url=base_url, personal_api_key=personal_api_key) as client:
-        with pytest.raises(OperationNotAvailableError):
+        with pytest.raises(OperationNotAvailableError, match="режиме сессии"):
             await get_room(client, "test-room-alpha")
 
     assert httpx_mock.get_requests() == []

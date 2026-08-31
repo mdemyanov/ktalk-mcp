@@ -309,11 +309,13 @@ async def test_ac_11_5_network_failure_does_not_trigger_automatic_retry_exactly_
 async def test_nfr7_cancel_meeting_apikey_mode_refuses_before_network_call(
     httpx_mock: HTTPXMock, base_url, personal_api_key
 ):
+    """Code review (epic-capability-pairing, Р1/Р2): `cancel_meeting` подтверждён
+    только под session — сообщение обязано советовать её, не ключ."""
     from ktalk_mcp.client import KTalkClient, OperationNotAvailableError
     from ktalk_mcp.meeting_scheduling import cancel_meeting
 
     async with KTalkClient(base_url=base_url, personal_api_key=personal_api_key) as client:
-        with pytest.raises(OperationNotAvailableError):
+        with pytest.raises(OperationNotAvailableError, match="режиме сессии"):
             await cancel_meeting(client, id=SIMPLE_ID, reason="")
 
     assert httpx_mock.get_requests() == []

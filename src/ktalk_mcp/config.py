@@ -35,18 +35,29 @@ def resolve_db_path(
     машинным дефолтом вне cwd (ADR-013) — единственный оставшийся источник
     относительного пути в этой функции теперь `host_config`, если проект-хозяин
     явно объявляет относительный `registry.db_path`.
+
+    Code review (epic-capability-pairing, Р4): `warn_if_sync_dir` (NFR-14 AC-2)
+    обязана применяться к итоговому пути независимо от источника (ADR-013-spec
+    §«Поток данных» п.4) — до этой правки вызывалась только в ветке машинного
+    дефолта; `--db`/`KTALK_REGISTRY_DB`/конфиг хозяина возвращали путь раньше.
     """
+    from ktalk_mcp.store import resolve_store_root, warn_if_sync_dir
+
     if cli_db:
-        return Path(cli_db)
+        path = Path(cli_db)
+        warn_if_sync_dir(path)
+        return path
     env = os.environ.get("KTALK_REGISTRY_DB")
     if env:
-        return Path(env)
+        path = Path(env)
+        warn_if_sync_dir(path)
+        return path
     if host_config is not None:
         configured = host_config.registry.get("db_path")
         if configured:
-            return Path(configured)
-
-    from ktalk_mcp.store import resolve_store_root, warn_if_sync_dir
+            path = Path(configured)
+            warn_if_sync_dir(path)
+            return path
 
     path = resolve_store_root() / "registry.db"
     warn_if_sync_dir(path)

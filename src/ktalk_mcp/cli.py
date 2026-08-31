@@ -227,9 +227,23 @@ def _cmd_dashboard(reg: Registry, args) -> int:
 
 
 def _cmd_export(reg: Registry, args) -> int:
+    """Code review (epic-capability-pairing, Р5): без `--out`, зеркало раньше всегда
+    ложилось рядом с резолвленной БД (`.parent`). Когда БД резолвится к машинному
+    дефолту централизованного хранилища (нет `--db`/`KTALK_REGISTRY_DB`/
+    `.ktalk.toml`), `.parent` — корень самого хранилища, что нарушает ADR-013/
+    NFR-16 («export SHALL keep generating that markdown mirror in the host
+    project, not in the store»). `args.db_from_machine_default` (см. `main()`)
+    различает этот случай — зеркало уходит в проект-хозяина (`CLAUDE_PROJECT_DIR`,
+    если задан, иначе cwd — тот же контракт, что у `discover_host_config` для
+    голого CLI-вызова), не в хранилище. Явный `--db`/env/конфиг хозяина не
+    затронуты — там `.parent` уже указывает в проект-хозяина, как и раньше."""
     text = render_markdown_mirror(reg, full=args.full)
     if args.out:
         out_path = Path(args.out)
+    elif getattr(args, "db_from_machine_default", False):
+        project_dir = os.environ.get("CLAUDE_PROJECT_DIR")
+        host_root = Path(project_dir) if project_dir else Path.cwd()
+        out_path = host_root / "registry.md"
     else:
         out_path = Path(resolve_db_path(args.db)).parent / "registry.md"
     out_path.write_text(text, encoding="utf-8")
@@ -392,13 +406,26 @@ def main(argv: list[str] | None = None) -> int:
         # см. dev-заметку) — здесь мутация полностью укрывает и этот случай.
         old_umask = os.umask(0o077)
         try:
-            db_path = resolve_db_path(args.db, host_config=host_config)
+            raw_cli_db = args.db
+            db_path = resolve_db_path(raw_cli_db, host_config=host_config)
             # MAJ-03: единственный резолв пути на команду. Хендлеры, которым нужен
             # каталог реестра (`_cmd_export` -> registry.md), обязаны опираться на
             # уже резолвленный путь — повторный resolve_db_path(args.db) без
             # host_config терял третий источник FR-23 и уводил зеркало к машинному
             # дефолту, пока сам реестр читался из `.ktalk.toml`.
             args.db = str(db_path)
+            # Code review (epic-capability-pairing, Р5): признак «путь резолвился к
+            # машинному дефолту централизованного хранилища», а не к --db/env/
+            # конфигу хозяина — считается ДО перезаписи `args.db` выше, той же
+            # логикой приоритета, что `resolve_db_path` (ADR-013 §3), без повторного
+            # вызова `resolve_store_root()` (не создавать хранилище стороны ради
+            # одной проверки). Использует только `_cmd_export`, чтобы не положить
+            # зеркало проекта-хозяина внутрь хранилища (NFR-16 AC).
+            args.db_from_machine_default = not (
+                raw_cli_db
+                or os.environ.get("KTALK_REGISTRY_DB")
+                or (host_config is not None and host_config.registry.get("db_path"))
+            )
             reg = Registry(db_path)
         finally:
             os.umask(old_umask)

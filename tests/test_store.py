@@ -242,3 +242,52 @@ def test_nfr14_2_explicit_path_inside_sync_dir_produces_warning_not_block(
     warn_if_sync_dir(user_path)
     captured = capsys.readouterr()
     assert "Dropbox" in captured.err or "Dropbox" in captured.out
+
+
+def test_nfr14_2_explicit_cli_db_flag_inside_sync_dir_produces_warning(
+    tmp_path, capsys, monkeypatch
+):
+    """Code review (epic-capability-pairing, Р4): `warn_if_sync_dir` реализована и
+    покрыта юнит-тестом выше, но до этой правки вызывалась ровно из одной точки —
+    `resolve_db_path` в ветке машинного дефолта (`config.py`). Ветки `--db` и
+    `KTALK_REGISTRY_DB` возвращали путь ДО вызова — оператор, указавший
+    `--db ~/Dropbox/registry.db`, предупреждения не получал вовсе.
+
+    Регрессия обязана идти через реальный вход пользователя (`ktalk --db ... list`),
+    не дёргать `warn_if_sync_dir`/`resolve_db_path` напрямую в обход `main()` —
+    именно так тест выше был зелёным при живом дефекте."""
+    db_path = tmp_path / "Dropbox" / "ktalk" / "registry.db"
+    db_path.parent.mkdir(parents=True)
+
+    monkeypatch.delenv("KTALK_REGISTRY_DB", raising=False)
+    monkeypatch.delenv("CLAUDE_PROJECT_DIR", raising=False)
+
+    from ktalk_mcp.cli import main
+
+    rc = main(["--db", str(db_path), "list", "--json"])
+    assert rc == 0
+    captured = capsys.readouterr()
+    assert "Dropbox" in captured.err, (
+        "ktalk --db внутри распознаваемого каталога синхронизации обязан "
+        "предупредить в stderr (NFR-14 AC-2), а не пройти молча"
+    )
+
+
+def test_nfr14_2_explicit_env_var_inside_sync_dir_produces_warning(tmp_path, capsys, monkeypatch):
+    """Тот же дефект (Р4), второй из двух источников, обходящих предупреждение до
+    правки — `KTALK_REGISTRY_DB`."""
+    db_path = tmp_path / "Dropbox" / "ktalk" / "registry.db"
+    db_path.parent.mkdir(parents=True)
+
+    monkeypatch.delenv("CLAUDE_PROJECT_DIR", raising=False)
+    monkeypatch.setenv("KTALK_REGISTRY_DB", str(db_path))
+
+    from ktalk_mcp.cli import main
+
+    rc = main(["list", "--json"])
+    assert rc == 0
+    captured = capsys.readouterr()
+    assert "Dropbox" in captured.err, (
+        "KTALK_REGISTRY_DB внутри распознаваемого каталога синхронизации обязан "
+        "предупредить в stderr (NFR-14 AC-2), а не пройти молча"
+    )
