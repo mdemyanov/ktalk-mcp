@@ -1,19 +1,12 @@
 {
   "enabledPlugins": {
-    "gramax@gramax-marketplace": true,
-    "nauta@nauta": true
+    "gramax@gramax-marketplace": true
   },
   "extraKnownMarketplaces": {
     "gramax-marketplace": {
       "source": {
         "repo": "mdemyanov/gramax-plugin",
         "source": "github"
-      }
-    },
-    "nauta": {
-      "source": {
-        "source": "git",
-        "url": "https://doc-hub.gitlab.yandexcloud.net/tools-ai/nauta.git"
       }
     }
   },
