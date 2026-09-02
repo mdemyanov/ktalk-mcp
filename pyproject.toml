@@ -24,9 +24,9 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/mdemyanov/ktalk-mcp"
-Repository = "https://github.com/mdemyanov/ktalk-mcp"
-Issues = "https://github.com/mdemyanov/ktalk-mcp/issues"
+Homepage = "https://github.com/mdemyanov/ktalk-cli"
+Repository = "https://github.com/mdemyanov/ktalk-cli"
+Issues = "https://github.com/mdemyanov/ktalk-cli/issues"
 
 [project.scripts]
 ktalk = "ktalk_cli.cli:main"

@@ -349,8 +349,8 @@ CLI работает с KTalk Web API. Набор путей, которые в�
 ## Разработка
 
 ```bash
-git clone https://github.com/mdemyanov/ktalk-mcp.git
-cd ktalk-mcp
+git clone https://github.com/mdemyanov/ktalk-cli.git
+cd ktalk-cli
 uv sync
 
 # Запуск тестов
