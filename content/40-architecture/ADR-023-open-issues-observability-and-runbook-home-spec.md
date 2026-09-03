@@ -26,7 +26,7 @@ Issue #3 (баг `.get("id", fallback)` в `formatters.py:126`/`:165`) сюда 
 | Компонент | Ответственность | Входы | Выходы | Зависимости |
 |---|---|---|---|---|
 | `transcript_identity.py` (новый модуль) | Извлечение идентификаторов спикеров/участников, сравнение | `TalkTranscript`, `TalkConferenceRecording` (оба — сырой JSON API) | `dict` результата сверки | нет (чистые функции) |
-| `cli_content.py::cmd_get_transcript` | Флаг `--verify-identity`, оркестрация второго вызова, сборка envelope | `args.verify_identity`, результат `client.get_transcript`, `client.get_recording` | текст ответа (markdown/JSON) с/без `identity_check` | `KTalkClient.get_recording`, `transcript_identity` |
+| `cli_content.py::cmd_get_transcript` | Флаг `--no-verify-identity` (сверка включена по умолчанию), оркестрация второго вызова, сборка envelope | `args.no_verify_identity`, результат `client.get_transcript`, `client.get_recording` | текст ответа (markdown/JSON) с/без `identity_check` | `KTalkClient.get_recording`, `transcript_identity` |
 
 ### `transcript_identity.py`
 
@@ -57,12 +57,13 @@ check_identity(transcript: dict, recording: dict) -> dict
 
 1. Как сегодня: `data = await client.get_transcript(recording_key)`. Ошибка здесь — как сегодня,
    отказ команды целиком (не относится к NFR-17).
-2. Если `--verify-identity`: отдельный `try` вокруг `await client.get_recording(recording_key)`.
-   Успех → `check_identity(data, recording)`. Исключение → `{"result": "not_checked", "reason":
-   redact_secrets(str(exc))}` (та же функция маскирования, что уже применяется к ошибке основного
-   вызова, NFR-5). Основной результат транскрипта возвращается в любом случае (AC3).
-3. Без `--verify-identity`: шаг 2 не выполняется, `identity_check` не формируется, второй сетевой
-   вызов не происходит — нулевая цена по умолчанию (ADR-023 §1).
+2. Если `--no-verify-identity` НЕ передан (умолчание — сверка включена, ADR-023 §1): отдельный
+   `try` вокруг `await client.get_recording(recording_key)`. Успех → `check_identity(data,
+   recording)`. Исключение → `{"result": "not_checked", "reason": redact_secrets(str(exc))}` (та
+   же функция маскирования, что уже применяется к ошибке основного вызова, NFR-5). Основной
+   результат транскрипта возвращается в любом случае (AC3).
+3. При `--no-verify-identity`: шаг 2 не выполняется, `identity_check` не формируется, второй
+   сетевой вызов не происходит — нулевая цена только при явном отказе.
 4. Сборка вывода:
    - markdown (`--json` не передан): `print(output_text)`, затем при наличии `identity_check` —
      одна строка `f"[identity-check] {identity_check['result']}"` (+ `reason`, если есть).
@@ -77,8 +78,8 @@ check_identity(transcript: dict, recording: dict) -> dict
 ## Границы — NFR-17
 
 - Не чинит причину подмены (контур/сеть) — RES-006 её не локализовал, ADR-023 её не проектирует.
-- Не кэширует и не переиспользует результат `get_recording` между вызовами — каждый вызов
-  `--verify-identity` платит своей ценой заново (простота важнее экономии для opt-in механизма).
+- Не кэширует и не переиспользует результат `get_recording` между вызовами — каждый вызов, где
+  сверка включена (умолчание), платит своей ценой заново; простота важнее экономии.
 - Не проверяет анонимных участников со сменным `anonymousId` — известное ограничение (ADR-023
   Consequences), не проверено живым тестом.
 
@@ -108,7 +109,8 @@ content/70-operations/
 
 ## NFR Mapping
 
-- `### Requirement: NFR-17` → `--verify-identity` + `transcript_identity.py`: `match`/`mismatch`/
+- `### Requirement: NFR-17` → сверка по умолчанию (`--no-verify-identity` отключает) +
+  `transcript_identity.py`: `match`/`mismatch`/
   `inconclusive`/`not_checked` — различает «сверено, совпадает» от «не сверено» (AC3), не
   ложноположит на консистентном ответе за счёт требования непустого пересечения, а не полного
   совпадения множеств (AC2).
@@ -124,8 +126,8 @@ content/70-operations/
 **Реализовать:**
 - Новый модуль `transcript_identity.py`: `_identity_key`, `speaker_identities`,
   `participant_identities`, `check_identity` — функции выше, без побочных эффектов.
-- `cli_content.py::cmd_get_transcript`: флаг `--verify-identity` (`action="store_true"`),
-  оркестрация шагов 1-4 выше.
+- `cli_content.py::cmd_get_transcript`: флаг `--no-verify-identity` (`action="store_true"`,
+  умолчание сверки — включена), оркестрация шагов 1-4 выше.
 - `cli.py::_cmd_dashboard`: строка `last_synced` в JSON-ответе.
 
 **Порядок:** fixtures (консистентный транскрипт+recording; расходящийся; recording-вызов падает;
@@ -145,8 +147,9 @@ content/70-operations/
 - Мониторинг: нет рантайм-метрик (CLI, не сервис) — `identity_check.result == "mismatch"` в логах
   вызывающей стороны (плагина) как сигнал инцидента, не метрика пакета.
 
-**NFR из BA:** NFR-17 (обнаружимость подмены — opt-in, цена на вызывающей стороне), FR-41
-(наблюдаемость момента синхронизации без мутации).
+**NFR из BA:** NFR-17 (обнаружимость подмены — включена по умолчанию, цена на каждом вызове
+`get-transcript` кроме явного `--no-verify-identity`), FR-41 (наблюдаемость момента синхронизации
+без мутации).
 
 ## Контракт с QA-author
 
@@ -165,11 +168,13 @@ content/70-operations/
 **Edge cases / граничные условия:**
 - Оба множества (спикеры/участники) пусты одновременно — `inconclusive`, не `match` и не
   `mismatch` (не путать «нечего сравнивать» с «совпало»).
-- `get_recording` возвращает 4xx/5xx/таймаут при `--verify-identity` — `not_checked`, основной
-  транскрипт всё равно печатается, код возврата команды остаётся 0.
-- `--chunk N` вне диапазона + `--verify-identity` + `--json` — `identity_check` не добавляется
+- `get_recording` возвращает 4xx/5xx/таймаут при включённой по умолчанию сверке — `not_checked`,
+  основной транскрипт всё равно печатается, код возврата команды остаётся 0.
+- `--chunk N` вне диапазона + сверка по умолчанию + `--json` — `identity_check` не добавляется
   (edge case парсинга, см. «Оркестрация» выше), regression-тест на этот путь отдельно от
   основного JSON-envelope теста.
+- `--no-verify-identity` передан явно — второй сетевой вызов не происходит вовсе (regression-тест
+  на отсутствие вызова `get_recording`, не только на отсутствие поля в выводе).
 - `dashboard --json` на свежей БД без единого `sync` — `last_synced: null`, не отсутствие ключа.
 - Серия вызовов `dashboard --json` подряд — статусы записей реестра не меняются (регрессия
   побочного эффекта, AC3 FR-41).
