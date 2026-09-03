@@ -15,6 +15,7 @@ CLI-реестр на SQLite). Здесь живёт ответ на вопро�
 | [30-requirements/](30-requirements/_index.md) | Требования и acceptance-критерии | BA |
 | [40-architecture/](40-architecture/_index.md) | Архитектурные спеки к ADR, контракты | SA |
 | [60-implementation/](60-implementation/_index.md) | Заметки об особенностях реализации | Dev |
+| [70-operations/](70-operations/_index.md) | Рунбуки эксплуатации (установка, миграция, откат) | DevOps |
 | [lessons-learned.md](lessons-learned.md) | Append-only журнал уроков | все роли |
 
 ## Что сюда не кладём

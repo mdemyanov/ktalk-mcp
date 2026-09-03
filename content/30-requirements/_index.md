@@ -9,6 +9,8 @@ title: Требования
 |------------|------|--------|
 | [Персональный API-ключ и расширение возможностей](personal-api-key.md) | Production | Draft |
 | [Комнаты, календарь и планирование встреч](rooms-calendar-scheduling.md) | Production | Draft |
+| [Наблюдаемость момента последней синхронизации реестра](registry-sync-observability.md) | Production | Draft |
+| [Обнаружимость подмены транскрипта под конкуренцией](transcript-identity-observability.md) | Production | Draft |
 | [Плагин ktalk в произвольном проекте](ktalk-plugin.md) | Pilot | Draft |
 | [Онбординг плагина ktalk](ktalk-plugin-onboarding.md) | — | Переехало в `ktalk-plugin` |
 | [Промт-поверхность плагина ktalk](ktalk-plugin-meetings.md) | — | Переехало в `ktalk-plugin` |

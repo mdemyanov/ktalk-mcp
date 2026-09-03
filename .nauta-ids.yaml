@@ -22,7 +22,7 @@
 # не применяется. Если корпус когда-нибудь примет любую из этих форм — запись заводится тем
 # же коммитом, что и первое определение (тот же принцип, что у `adr` ниже).
 namespaces:
-  # `adr` — реальный, наполненный корпус: ADR-001…ADR-022 (highwater поднимается тем же
+  # `adr` — реальный, наполненный корпус: ADR-001…ADR-023 (highwater поднимается тем же
   # коммитом, что и новый файл решения — ручная дисциплина, `next-id.sh` в этом дереве не
   # заведён). Кладбище — `_index.md`: сегодня это markdown-таблица без списочных строк вида
   # «- ADR-NNN — отменён», поэтому парсер кладбища (ждёт `- `) не находит отменённых номеров.
@@ -35,8 +35,24 @@ namespaces:
     scope: namespace
     allocation: allocated
     populated: true
-    highwater: 22
+    highwater: 23
     graveyard: content/00-project/adr/_index.md
+
+  # `ops` — дом рунбуков DevOps (ADR-023 §3, issue #7: OPS-001 использовался в 10 местах
+  # дерева как номерной идентификатор, но без дома и без гейта на коллизию будущего OPS-002).
+  # Та же дисциплина, что `adr`: filename-prefix, highwater поднимается тем же коммитом, что
+  # новый файл. Первый файл — `OPS-001-registry-migration-rollback.md` (задача DevOps,
+  # issue #7) — `populated`/`highwater` подняты этим же коммитом (SA-013, решение 3).
+  - namespace: ops
+    prefix: "OPS-"
+    width: 3
+    home: ["content/70-operations/OPS-*.md"]
+    definition: filename-prefix
+    scope: namespace
+    allocation: allocated
+    populated: true
+    highwater: 1
+    graveyard: content/70-operations/_index.md
 
   # Дом контракта поведения требований (ADR-021, C15/C16 валидатора nauta 0.26.0). Пустой
   # `prefix` — по построению шаблона донора: ключ сценария выводится из текста заголовка

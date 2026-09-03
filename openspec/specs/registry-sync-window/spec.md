@@ -3,9 +3,11 @@
 ## Purpose
 
 Governs how `ktalk sync` bounds a single page request, continues across pages, restricts results
-to a client-side date window (because the server does not honor date filters), and protects the
-registry against duplication the first time a domain switches to api-key mode. Source:
-`content/30-requirements/personal-api-key.md` FR-14…FR-16.
+to a client-side date window (because the server does not honor date filters), protects the
+registry against duplication the first time a domain switches to api-key mode, and exposes the
+moment of the last completed sync to read-only consumers without requiring a mutating `sync` call
+to observe it. Source: `content/30-requirements/personal-api-key.md` FR-14…FR-16; the last-sync
+observability requirement — `content/30-requirements/registry-sync-observability.md` FR-41.
 
 ## Requirements
 
@@ -92,3 +94,31 @@ ordinary (writing) sync from running automatically; a full match SHALL allow it 
 - **WHEN** the dry run finds the api-key response's identifiers and the window-scoped registry's
   identifiers to be identical sets
 - **THEN** the ordinary sync MAY proceed
+
+### Requirement: The last sync moment is exposed by a reading command, not only recorded internally
+
+At least one documented reading command's `--json` output SHALL carry the moment of the most
+recently completed sync, without requiring a mutating `sync` call to obtain it — the moment is
+already recorded internally (the `meta` table) but SHALL also be reachable through a read path, so
+a consumer can distinguish "nothing pending" from "stale, unsynced data" without triggering
+`sync`'s own side effect of aging `new` records past the retention window into `skipped`. When no
+sync has ever completed, the exposed value SHALL be an explicit absent-state marker, not a
+silently omitted field. Reading the exposed value, any number of times, SHALL NOT change any
+recording's status.
+
+#### Scenario: A reading command surfaces the last completed sync moment
+
+- **WHEN** a reading command's `--json` output is requested after at least one completed sync
+- **THEN** the response SHALL carry the moment of that sync, matching the value the sync run
+  recorded
+
+#### Scenario: An unsynced registry states absence explicitly
+
+- **WHEN** a reading command's `--json` output is requested before any sync has ever completed
+- **THEN** the response SHALL mark the sync moment as explicitly absent, not omit the field
+  silently
+
+#### Scenario: Reading the sync moment never mutates registry data
+
+- **WHEN** any reading command that exposes the sync moment is invoked, any number of times
+- **THEN** no recording's status SHALL change as a side effect of that call
