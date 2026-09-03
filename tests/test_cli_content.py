@@ -113,11 +113,15 @@ def test_get_recording_error_goes_to_stderr_with_nonzero_exit(httpx_mock: HTTPXM
 
 @pytest.mark.httpx_mock(assert_all_responses_were_requested=False)
 def test_get_transcript_json_default_returns_raw_json(httpx_mock: HTTPXMock, capsys):
+    """`--no-verify-identity`: предмет теста — форма raw-JSON транскрипта, не NFR-17
+    (ADR-023 §1 сделал сверку идентичности умолчанием — без флага здесь потребовался
+    бы и мок `get_recording`; отдельное покрытие умолчания-включено —
+    `tests/test_nfr17_identity_verification.py`)."""
     from ktalk_cli.cli import main
 
     httpx_mock.add_response(json={"status": "done", "tracks": []})
 
-    rc = main(["get-transcript", "REC-1", "--json"])
+    rc = main(["get-transcript", "REC-1", "--json", "--no-verify-identity"])
 
     assert rc == 0
     out = json.loads(capsys.readouterr().out)
@@ -126,11 +130,13 @@ def test_get_transcript_json_default_returns_raw_json(httpx_mock: HTTPXMock, cap
 
 @pytest.mark.httpx_mock(assert_all_responses_were_requested=False)
 def test_get_transcript_markdown_default(httpx_mock: HTTPXMock, capsys):
+    """`--no-verify-identity` — см. комментарий у `test_get_transcript_json_default_
+    returns_raw_json` выше: предмет здесь — markdown-рендер, не NFR-17."""
     from ktalk_cli.cli import main
 
     httpx_mock.add_response(json={"status": "done", "tracks": []})
 
-    rc = main(["get-transcript", "REC-1"])
+    rc = main(["get-transcript", "REC-1", "--no-verify-identity"])
 
     assert rc == 0
     assert "Транскрипт" in capsys.readouterr().out

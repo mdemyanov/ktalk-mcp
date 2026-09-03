@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import json
 import sys
 from collections.abc import Awaitable, Callable
 
@@ -27,6 +28,7 @@ from ktalk_cli.formatters import (
     render_tool_output,
     render_transcript_output,
 )
+from ktalk_cli.transcript_identity import check_identity
 
 
 def register_subparsers(sub) -> None:
@@ -48,6 +50,12 @@ def register_subparsers(sub) -> None:
     p_tr.add_argument("--chunk", type=int, default=0)
     p_tr.add_argument("--chunk-size", type=int, default=30000)
     p_tr.add_argument("--json", action="store_true")
+    p_tr.add_argument(
+        "--no-verify-identity",
+        action="store_true",
+        help="Отключить сверку идентичности спикеров с участниками записи (NFR-17, "
+        "по умолчанию включена)",
+    )
 
     p_sum = sub.add_parser("get-summary", help="Полное саммари записи (сеть)")
     p_sum.add_argument("recording_key")
@@ -111,18 +119,64 @@ def cmd_get_recording(_reg, args: argparse.Namespace) -> int:
     return _run(_get_recording(args), format_recording, json_flag=args.json)
 
 
-def cmd_get_transcript(_reg, args: argparse.Namespace) -> int:
-    async def _fetch() -> dict:
-        async with KTalkClient.from_settings(Settings()) as client:
-            return await client.get_transcript(args.recording_key)
+async def _verify_transcript_identity(client: KTalkClient, recording_key: str, transcript: dict) -> dict:
+    """Оркестрация NFR-17 (ADR-023 §1, ред. 2a2f6e3): независимый вызов
+    `get_recording`; отказ вызова -> `not_checked` (маскирование той же функцией,
+    что и основная ошибка, NFR-5), не исключение наружу — основной результат
+    транскрипта возвращается в любом случае."""
+    try:
+        recording = await client.get_recording(recording_key)
+    except Exception as exc:  # noqa: BLE001 - not_checked, не отказ команды
+        return {"result": "not_checked", "reason": redact_secrets(str(exc))}
+    return check_identity(transcript, recording)
+
+
+def _render_transcript_with_identity(
+    output_text: str, identity_check: dict | None, *, json_flag: bool
+) -> str:
+    """Сборка вывода `get-transcript` (companion-спека «Оркестрация», шаг 4).
+    `identity_check is None` -> сверка отключена (`--no-verify-identity`), выводим
+    как раньше."""
+    if identity_check is None:
+        return output_text
+
+    if not json_flag:
+        line = f"[identity-check] {identity_check['result']}"
+        if "reason" in identity_check:
+            line += f" ({identity_check['reason']})"
+        return f"{output_text}\n{line}"
 
     try:
-        data = asyncio.run(_fetch())
+        parsed = json.loads(output_text)
+    except (json.JSONDecodeError, ValueError):
+        # `--chunk N` вне диапазона отдаёт нестрого-JSON текст — сверять нечего,
+        # печатаем как есть (companion-спека, edge case чанкинга).
+        return output_text
+
+    return json.dumps(
+        {"transcript": parsed, "identity_check": identity_check}, ensure_ascii=False, indent=2
+    )
+
+
+def cmd_get_transcript(_reg, args: argparse.Namespace) -> int:
+    async def _fetch() -> tuple[dict, dict | None]:
+        async with KTalkClient.from_settings(Settings()) as client:
+            data = await client.get_transcript(args.recording_key)
+            identity_check = None
+            if not args.no_verify_identity:
+                identity_check = await _verify_transcript_identity(
+                    client, args.recording_key, data
+                )
+            return data, identity_check
+
+    try:
+        data, identity_check = asyncio.run(_fetch())
     except Exception as exc:  # noqa: BLE001 - surface as CLI error, NFR-5 маскирует
         print(f"Ошибка: {redact_secrets(str(exc))}", file=sys.stderr)
         return 1
     fmt = "raw" if args.json else "markdown"
-    print(render_transcript_output(data, fmt, args.chunk, args.chunk_size))
+    output_text = render_transcript_output(data, fmt, args.chunk, args.chunk_size)
+    print(_render_transcript_with_identity(output_text, identity_check, json_flag=args.json))
     return 0
 
 

@@ -123,7 +123,7 @@ def format_recording(data: dict) -> str:
     title = data.get("title", "Без названия")
     lines = [f"# {title}", ""]
 
-    lines.append(f"- **Ключ:** {data.get('id', data.get('key', 'N/A'))}")
+    lines.append(f"- **Ключ:** {data.get('id') or data.get('key') or 'N/A'}")
     lines.append(f"- **Дата:** {_format_datetime(data.get('createdDate'))}")
 
     created_by = data.get("createdBy")
@@ -162,7 +162,7 @@ def format_recordings_list(data: dict) -> str:
     ]
 
     for rec in entities:
-        rec_id = rec.get("id", rec.get("key", "N/A"))
+        rec_id = rec.get("id") or rec.get("key") or "N/A"
         title = rec.get("title", "Без названия")
         date = _format_datetime(rec.get("createdDate"))
         created_by = rec.get("createdBy") or {}

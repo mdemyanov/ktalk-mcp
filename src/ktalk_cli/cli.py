@@ -212,7 +212,7 @@ def _cmd_dashboard(reg: Registry, args) -> int:
     new = [r for r in recs if r["status"] == "new"]
     stats = {s: sum(1 for r in recs if r["status"] == s) for s in _STATUSES}
     if args.json:
-        _print_json({"new": new, "stats": stats})
+        _print_json({"new": new, "stats": stats, "last_synced": reg.get_meta("last_synced")})
         return 0
     print("# Дашборд KTalk\n")
     print("## Новые записи")
