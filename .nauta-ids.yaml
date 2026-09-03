@@ -41,9 +41,8 @@ namespaces:
   # `ops` — дом рунбуков DevOps (ADR-023 §3, issue #7: OPS-001 использовался в 10 местах
   # дерева как номерной идентификатор, но без дома и без гейта на коллизию будущего OPS-002).
   # Та же дисциплина, что `adr`: filename-prefix, highwater поднимается тем же коммитом, что
-  # новый файл. `populated: false`/`highwater: 0` до первого файла — раздел не материализуется
-  # пустым каркасом (правило трёх домов, прецедент `scenario` ниже): DevOps заводит
-  # `OPS-001-…md` и поднимает оба значения тем же коммитом, что и файл, не эта задача (SA-013).
+  # новый файл. Первый файл — `OPS-001-registry-migration-rollback.md` (задача DevOps,
+  # issue #7) — `populated`/`highwater` подняты этим же коммитом (SA-013, решение 3).
   - namespace: ops
     prefix: "OPS-"
     width: 3
@@ -51,8 +50,8 @@ namespaces:
     definition: filename-prefix
     scope: namespace
     allocation: allocated
-    populated: false
-    highwater: 0
+    populated: true
+    highwater: 1
     graveyard: content/70-operations/_index.md
 
   # Дом контракта поведения требований (ADR-021, C15/C16 валидатора nauta 0.26.0). Пустой
