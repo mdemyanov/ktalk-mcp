@@ -3,9 +3,12 @@
 ## Purpose
 
 Governs the four operations that read data beyond a recording's basic list/detail/transcript/
-summary: downloading the video file, obtaining the full participant roster, listing the archive
-of past conferences, and reading a meeting's chat messages. Source:
-`content/30-requirements/personal-api-key.md` FR-7…FR-10.
+summary — downloading the video file, obtaining the full participant roster, listing the archive
+of past conferences, and reading a meeting's chat messages — plus the observability contract for
+detecting when the basic transcript read returns content belonging to a different recording than
+the one requested. Source: `content/30-requirements/personal-api-key.md` FR-7…FR-10; the
+transcript-identity observability requirement —
+`content/30-requirements/transcript-identity-observability.md` NFR-17.
 
 ## Requirements
 
@@ -129,3 +132,40 @@ on a specific channel SHALL be reported as a permissions gap on that channel by 
 - **WHEN** the server returns `403` for a specific chat channel
 - **THEN** the message SHALL name that channel and state the caller lacks access to it, not
   surface a bare `403`
+
+### Requirement: A transcript response's recording identity is independently verifiable, not assumed from a successful call
+
+The client SHALL make available a way to determine, independently of the transcript response's own
+success, whether transcript content returned for a requested `recording_id` actually corresponds
+to that recording. The transcript-endpoint contract (`TalkTranscript`,
+`talk.public.api-api-2.json`: `status`, `statusMessage`, `tracks`, `errors`, `transcriptId`,
+`additionalProperties: false`) carries no field echoing the requested `recordingKey` or
+`conferenceKey`, so a wrong-content response is otherwise indistinguishable from a correct one —
+valid JSON, exit code 0, no error field. Verification SHALL be based on data independently
+obtainable for the same `recording_id` (for example the recording's own participant roster), not
+on any field of the transcript response itself, because no identity-echo field exists in the
+contract.
+
+**Known limitation, scoped by design (not a defect):** because the contract has no identity-echo
+field, no mechanism can offer a deterministic, zero-cost confirmation — every verification path
+costs at least one additional call to an independent source. Which independent source is used and
+how the check is wired into `get-transcript` is an architecture decision, not fixed by this
+requirement.
+
+#### Scenario: An indistinguishable-by-default response is made distinguishable
+
+- **WHEN** a transcript response is returned for a requested `recording_id`
+- **THEN** the client SHALL make available an independent verification path that, when exercised,
+  confirms or denies that the content belongs to the requested recording
+
+#### Scenario: A correctly matched response does not trigger a false mismatch
+
+- **WHEN** the independent verification path is exercised against a transcript response that
+  genuinely belongs to the requested recording
+- **THEN** it SHALL NOT report a mismatch
+
+#### Scenario: An unavailable verification path is reported, not silently skipped
+
+- **WHEN** the independent source needed for verification cannot be reached or fails
+- **THEN** the client SHALL report that verification could not be performed, not treat the
+  transcript response as confirmed
