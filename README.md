@@ -197,13 +197,18 @@ ktalk auth-status
 ## Команды чтения записей и справочников
 
 Все команды поддерживают `--json` (валидный JSON в stdout; ошибки — в stderr с
-ненулевым кодом возврата).
+ненулевым кодом возврата). Общая конвенция кодов возврата CLI: `0` — успех, `1` —
+отказ вызова (сеть/сервер/конфигурация), `2` — usage error (неверные аргументы
+CLI, `argparse`). `ktalk get-transcript` дополнительно завершается кодом `3`,
+когда независимая сверка идентичности (`identity_check.result == "mismatch"`)
+обнаружила расхождение состава между транскриптом и записью — тело ответа при
+этом печатается полностью, код 3 отделяет этот отказ от 0/1/2 (ADR-024 §Д1).
 
 | Команда | Назначение |
 |---|---|
 | `ktalk list-recordings [--query Q] [--start-from ISO] [--start-to ISO] [--top N] [--order O] [--page-token T]` | Список записей. `--top` 1–1000 (по умолчанию 30); `--order`: `byTimeNewFirst` (умолчание), `byTimeOldFirst`, `byTitle`, `bySizeBigFirst`, `bySizeSmallFirst`. |
 | `ktalk get-recording <recording_key>` | Детали записи — автор, дата, длительность, участники (список ограничен 6, полный состав — `get-participants`). |
-| `ktalk get-transcript <recording_key> [--chunk N] [--chunk-size N]` | Транскрипт по спикерам с таймкодами. Длинный транскрипт режется на чанки по границам реплик: `--chunk 0` (умолчание) — целиком или первый чанк; `--chunk-size` — макс. символов в чанке (умолчание 30000, ~7500 токенов). |
+| `ktalk get-transcript <recording_key> [--chunk N] [--chunk-size N]` | Транскрипт по спикерам с таймкодами. Длинный транскрипт режется на чанки по границам реплик: `--chunk 0` (умолчание) — целиком или первый чанк; `--chunk-size` — макс. символов в чанке (умолчание 30000, ~7500 токенов). Независимая сверка идентичности включена по умолчанию (`--no-verify-identity` отключает); `--chunk` вне диапазона сверку по сети не запускает вовсе, `identity_check.result == "not_checked"`/`reason: "chunk_out_of_range"`. |
 | `ktalk get-summary <recording_key>` | Полное саммари (краткое резюме + протокол). |
 | `ktalk get-summary-type <recording_key> --type shortSummary\|protocol` | Саммари одного типа. |
 | `ktalk get-participants <recording_key>` | Полный состав участников, включая анонимных — обходит лимит в 6, который отдают `get-recording`/`list-recordings`. |

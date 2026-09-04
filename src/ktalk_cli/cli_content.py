@@ -27,6 +27,7 @@ from ktalk_cli.formatters import (
     format_summary_by_type,
     render_tool_output,
     render_transcript_output,
+    resolve_chunk_range,
 )
 from ktalk_cli.transcript_identity import check_identity
 
@@ -132,11 +133,13 @@ async def _verify_transcript_identity(client: KTalkClient, recording_key: str, t
 
 
 def _render_transcript_with_identity(
-    output_text: str, identity_check: dict | None, *, json_flag: bool
+    output_text: str, identity_check: dict | None, *, json_flag: bool, in_range: bool = True
 ) -> str:
-    """Сборка вывода `get-transcript` (companion-спека «Оркестрация», шаг 4).
+    """Сборка вывода `get-transcript` (companion-спека «Оркестрация», шаг 5).
     `identity_check is None` -> сверка отключена (`--no-verify-identity`), выводим
-    как раньше."""
+    как раньше. `in_range` — валидность `--chunk` уже известна вызывающей стороне
+    (`resolve_chunk_range`, ADR-024 §Д3) — на пути вне диапазона JSON-конверт
+    собирается явно (`{"error": …}`), без `try/except JSONDecodeError`."""
     if identity_check is None:
         return output_text
 
@@ -146,37 +149,53 @@ def _render_transcript_with_identity(
             line += f" ({identity_check['reason']})"
         return f"{output_text}\n{line}"
 
-    try:
-        parsed = json.loads(output_text)
-    except (json.JSONDecodeError, ValueError):
-        # `--chunk N` вне диапазона отдаёт нестрого-JSON текст — сверять нечего,
-        # печатаем как есть (companion-спека, edge case чанкинга).
-        return output_text
+    if not in_range:
+        return json.dumps(
+            {"error": output_text, "identity_check": identity_check},
+            ensure_ascii=False,
+            indent=2,
+        )
 
+    parsed = json.loads(output_text)
     return json.dumps(
         {"transcript": parsed, "identity_check": identity_check}, ensure_ascii=False, indent=2
     )
 
 
 def cmd_get_transcript(_reg, args: argparse.Namespace) -> int:
-    async def _fetch() -> tuple[dict, dict | None]:
+    fmt = "raw" if args.json else "markdown"
+
+    async def _fetch() -> tuple[dict, dict | None, bool]:
         async with KTalkClient.from_settings(Settings()) as client:
             data = await client.get_transcript(args.recording_key)
+            in_range, _total_chunks = resolve_chunk_range(data, fmt, args.chunk, args.chunk_size)
             identity_check = None
             if not args.no_verify_identity:
-                identity_check = await _verify_transcript_identity(
-                    client, args.recording_key, data
-                )
-            return data, identity_check
+                if in_range:
+                    identity_check = await _verify_transcript_identity(
+                        client, args.recording_key, data
+                    )
+                else:
+                    # ADR-024 §Д3: чанк заведомо вне диапазона — сверка не
+                    # оплачивается сетевым вызовом, `not_checked` формируется
+                    # локально, переиспользуя словарь исходов ADR-023.
+                    identity_check = {"result": "not_checked", "reason": "chunk_out_of_range"}
+            return data, identity_check, in_range
 
     try:
-        data, identity_check = asyncio.run(_fetch())
+        data, identity_check, in_range = asyncio.run(_fetch())
     except Exception as exc:  # noqa: BLE001 - surface as CLI error, NFR-5 маскирует
         print(f"Ошибка: {redact_secrets(str(exc))}", file=sys.stderr)
         return 1
-    fmt = "raw" if args.json else "markdown"
     output_text = render_transcript_output(data, fmt, args.chunk, args.chunk_size)
-    print(_render_transcript_with_identity(output_text, identity_check, json_flag=args.json))
+    print(
+        _render_transcript_with_identity(
+            output_text, identity_check, json_flag=args.json, in_range=in_range
+        )
+    )
+    if identity_check is not None and identity_check.get("result") == "mismatch":
+        # ADR-024 §Д1: отказ становится громким — код 3, отдельный от 0/1/2.
+        return 3
     return 0
 
 
