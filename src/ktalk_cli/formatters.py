@@ -318,6 +318,37 @@ def chunk_transcript_raw(data: dict, chunk_size: int) -> list[str]:
     return chunks
 
 
+def _chunk_transcript(data: dict, fmt: str, chunk_size: int, full_text: str) -> list[str]:
+    """Общая точка чанкинга для `render_transcript_output`/`resolve_chunk_range` —
+    не дублирует ветвление raw/markdown (ADR-024 companion-спека §3)."""
+    if fmt == "raw":
+        return chunk_transcript_raw(data, chunk_size)
+    return chunk_transcript_markdown(full_text, chunk_size)
+
+
+def resolve_chunk_range(data: dict, fmt: str, chunk: int, chunk_size: int) -> tuple[bool, int]:
+    """Определяет, лежит ли `chunk` в валидном диапазоне для `data`, БЕЗ сети
+    (ADR-024 §Д3, issue #9) — переиспользует чанкинг `render_transcript_output`,
+    не дублирует его. Отрицательный `chunk` — тоже вне диапазона (не Python-
+    отрицательная индексация).
+
+    Возвращает `(in_range, total_chunks)`.
+    """
+    if fmt == "raw":
+        full_text = format_raw(data)
+    else:
+        full_text = format_transcript(data)
+
+    if chunk == 0 and len(full_text) <= chunk_size:
+        return True, 1
+
+    chunks = _chunk_transcript(data, fmt, chunk_size, full_text)
+    total_chunks = len(chunks)
+    chunk_index = 0 if chunk == 0 else chunk - 1
+
+    return 0 <= chunk_index < total_chunks, total_chunks
+
+
 def render_transcript_output(data: dict, fmt: str, chunk: int, chunk_size: int) -> str:
     """Общий слой чтения транскрипта с чанкингом — единственная точка правды для
     `ktalk_get_transcript` (MCP) и `ktalk get-transcript` (CLI, DEV-002 волны 3):
@@ -332,10 +363,7 @@ def render_transcript_output(data: dict, fmt: str, chunk: int, chunk_size: int) 
     if chunk == 0 and total_characters <= chunk_size:
         return full_text
 
-    if fmt == "raw":
-        chunks = chunk_transcript_raw(data, chunk_size)
-    else:
-        chunks = chunk_transcript_markdown(full_text, chunk_size)
+    chunks = _chunk_transcript(data, fmt, chunk_size, full_text)
 
     total_chunks = len(chunks)
     chunk_index = 0 if chunk == 0 else chunk - 1

@@ -169,3 +169,17 @@ requirement.
 - **WHEN** the independent source needed for verification cannot be reached or fails
 - **THEN** the client SHALL report that verification could not be performed, not treat the
   transcript response as confirmed
+
+#### Scenario: A detected mismatch fails loudly, not silently
+
+- **WHEN** identity verification reports a mismatch for a `get-transcript` response
+- **THEN** the command SHALL exit with a status code distinct from success, from a usage error,
+  and from a hard fetch failure, in addition to carrying the mismatch result in its output body
+
+#### Scenario: An out-of-range chunk request does not silently drop the verification signal
+
+- **WHEN** `get-transcript` is called with a chunk index outside the valid range for the
+  requested transcript
+- **THEN** identity verification SHALL NOT be attempted over the network for that call, and the
+  response SHALL still carry an explicit signal that verification was not performed, naming the
+  out-of-range chunk as the reason

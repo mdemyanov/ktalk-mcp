@@ -1,7 +1,8 @@
 """AT-design: NFR-17 — обнаружимость подмены транскрипта под конкуренцией
-(`content/40-architecture/at-design-adr023-open-issues.md`, раздел «NFR-17»).
+(`content/40-architecture/at-design-adr023-open-issues.md`, раздел «NFR-17»;
+волна 2 (ADR-024, Д1/Д3) — `content/40-architecture/at-design-adr024-open-issues-wave2.md`).
 
-Покрывает 3 AC NFR-17 из `content/30-requirements/transcript-identity-observability.md`
+Покрывает 5 AC NFR-17 из `content/30-requirements/transcript-identity-observability.md`
 (BA-014, вход RES-006) через `#### Scenario:` капабилити-спеки
 `openspec/specs/recording-data-access/spec.md`, раздел «A transcript response's
 recording identity is independently verifiable, not assumed from a successful call»:
@@ -11,6 +12,21 @@ recording identity is independently verifiable, not assumed from a successful ca
 - NFR17-AC3 — недоступность независимого источника отдаёт явный сигнал
   «не сверено» (`not_checked`), не тихое умолчание о совпадении; основной результат
   транскрипта возвращается в любом случае.
+- NFR17-AC4 (ADR-024 Д1, issue #5, новый сценарий капабилити-спеки «A detected
+  mismatch fails loudly, not silently») — `mismatch` обязан завершать `get-transcript`
+  кодом возврата 3, отдельным от 0 (успех), 1 (отказ вызова) и 2 (usage error);
+  тело ответа (`transcript`+`identity_check`) не пустеет. Причина исходной подмены
+  этим НЕ устраняется (ADR-024 §Д1) — тест проверяет только громкость отказа.
+- NFR17-AC5 (ADR-024 Д3, issue #9, новый сценарий «An out-of-range chunk request
+  does not silently drop the verification signal») — `--chunk` вне диапазона
+  обязан (а) не платить сетевым вызовом `get_recording` вовсе, (б) отдавать явный
+  `identity_check.result == "not_checked"`, `reason == "chunk_out_of_range"` в
+  валидном `--json`-конверте, отличимо от «сверка прошла и совпало».
+
+ADR-024 Д2 (issue #8) не меняет код — устойчивость `anonymousId` подтверждена
+измерением на живом контуре (companion-спека §2), не тестом; регрессия ключа
+сравнения анонимов уже покрыта ниже
+(`test_nfr17_boundary_anonymous_participants_identified_by_anonymous_id`).
 
 Решение SA, ПОПРАВЛЕННОЕ владельцем на gate-sa (ADR-023, ред. 2a2f6e3, НЕ 81b379a):
 сверка ВКЛЮЧЕНА ПО УМОЛЧАНИЮ у `get-transcript`; флаг `--no-verify-identity` её
@@ -50,6 +66,26 @@ NFR-17»): `match` (пересечение непусто), `mismatch` (оба �
   усиленные тесты ниже проверяют явно: (а) поле `identity_check` не пропущено, (б)
   результат не «match» по умолчанию при отказе, (в) `--no-verify-identity` даёт
   ИМЕННО отсутствие второго вызова, а не тихий always-on второй вызов вопреки флагу.
+- **NFR17-AC4 (Д1), испорченный ввод** — N/A, явно, не по умолчанию: `mismatch` —
+  сигнатура серверной кросс-контаминации (RES-006), не опечатки `recording_key`.
+  Опечатанный ключ, для которого сервер отдаёт СОГЛАСОВАННЫЙ (тот же неверный ключ)
+  ответ и на транскрипт, и на `get_recording`, даёт `match` на СВОЁМ (чужом) составе,
+  не `mismatch` — нет воспроизводимого триггера подмены со стороны клиентского ввода
+  (ADR-024 §Д1: причина не локализована, тест на неё не проектируется).
+- **NFR17-AC4 (Д1), замаскированный отказ** — это и есть самый предмет решения:
+  до ADR-024 код возврата 0 на `mismatch` МАСКИРОВАЛ обнаруженное расхождение от
+  потребителей, читающих только код (не тело ответа). `test_nfr17_ac4_…` проверяет
+  явно, что маска снята: `rc == 3`, отдельно от 0/1/2.
+- **NFR17-AC5 (Д3), испорченный ввод** — отрицательный номер чанка
+  (`--chunk -1`) — не просто «вне диапазона», а структурно бессмысленное значение,
+  которое пользователь мог ввести по опечатке; должно давать тот же исход
+  (`not_checked`/`chunk_out_of_range`, ноль сетевых вызовов), не отдельную ветку.
+- **NFR17-AC5 (Д3), замаскированный отказ** — до ADR-024 результат сверки на этой
+  ветке ВЫЧИСЛЯЛСЯ (сетевой вызов оплачивался), но ТИХО терялся сборкой `--json`
+  (`JSONDecodeError` -> печать как есть, без `identity_check`) — неотличимо от
+  «сверка прошла успешно» на уровне общей формы ответа. Тесты проверяют явно:
+  ноль вызовов `get_recording` (не просто «результат не виден») и присутствие
+  структурированного `identity_check.reason == "chunk_out_of_range"` в JSON.
 """
 
 from __future__ import annotations
@@ -83,6 +119,13 @@ def _transcript_url_re(key: str) -> re.Pattern:
 
 def _recording_url_re(key: str) -> re.Pattern:
     return re.compile(rf"{re.escape(BASE_URL)}/api/recordings/{re.escape(key)}(\?.*)?$")
+
+
+def _count_recording_calls(httpx_mock: HTTPXMock, key: str) -> int:
+    """Число сетевых вызовов ИМЕННО `get_recording` (не транскрипта) — ADR-024 Д3
+    требует ровно 0 на `--chunk` вне диапазона, не «меньше вызовов вообще»."""
+    pattern = _recording_url_re(key)
+    return sum(1 for req in httpx_mock.get_requests() if pattern.search(str(req.url)))
 
 
 # ============================================================================================
@@ -326,12 +369,20 @@ def test_nfr17_no_verify_identity_flag_skips_second_call_entirely(
 
 
 @pytest.mark.httpx_mock(assert_all_responses_were_requested=False)
-def test_nfr17_ac1_mismatch_surfaced_in_default_on_json_response(
+def test_nfr17_ac4_mismatch_exits_with_code_3_and_still_carries_full_body(
     httpx_mock: HTTPXMock, monkeypatch, capsys
 ):
-    """NFR17-AC1 буквально: конкурентная подмена (расходящиеся составы) -> потребитель
-    получает наблюдаемый признак ПРЕЖДЕ, чем содержимое использовано дальше — признак
-    доступен уже в самом `--json`-ответе `get-transcript`, не требует отдельного вызова."""
+    """NFR17-AC1+AC4 (ADR-024 Д1, issue #5): конкурентная подмена (расходящиеся
+    составы) -> потребитель получает наблюдаемый признак ПРЕЖДЕ, чем содержимое
+    использовано дальше (признак доступен уже в самом `--json`-ответе, AC1), И код
+    возврата 3 — отдельный от 0/1/2 (AC4, ADR-024 Д1).
+
+    ПРАВКА КОНТРАКТА (не регресс, не находка QA-runner): до ADR-024 этот же тест
+    закреплял `assert rc == 0` на mismatch — ровно то тихое поведение, которое
+    решение Д1 отменяет («отказ становится громким», не «гонка устранена» —
+    ADR-024 §Д1 дословно). Старое утверждение: `assert rc == 0`. Новое: `assert
+    rc == 3`. Причина исходной подмены (issue #5) этим НЕ локализована — тест не
+    проверяет большего, чем громкость отказа."""
     key = "REC-1"
     httpx_mock.add_response(
         json={
@@ -350,10 +401,23 @@ def test_nfr17_ac1_mismatch_surfaced_in_default_on_json_response(
     rc = _run(["get-transcript", key, "--json"], monkeypatch)
     out = json.loads(capsys.readouterr().out)
 
-    assert rc == 0
     assert out["identity_check"]["result"] == "mismatch", (
         f"NFR17-AC1: составы {{'u9'}} vs {{'u1'}} не пересекаются — ожидался mismatch "
         f"в самом --json ответе, получено {out.get('identity_check')}"
+    )
+    assert rc == 3, (
+        "NFR17-AC4 (ADR-024 Д1, замаскированный отказ до правки): `mismatch` обязан "
+        f"завершать команду кодом 3, отдельным от 0/1/2 — фактический код {rc}. "
+        "Старый контракт (`rc == 0` даже на mismatch) отменён этим ADR — это НЕ "
+        "регресс покрытия, а сознательная правка теста под новое решение."
+    )
+    assert rc not in (0, 1, 2), (
+        f"NFR17-AC4: код 3 обязан быть отличим от успеха(0)/отказа вызова(1)/usage error(2), "
+        f"получено {rc}"
+    )
+    assert out.get("transcript") is not None, (
+        "NFR17-AC4 (замаскированный отказ): код 3 не должен опустошать тело ответа — "
+        f"`transcript` обязан присутствовать целиком, получено {out}"
     )
 
 
@@ -427,26 +491,37 @@ def test_nfr17_malformed_mistyped_recording_key_get_recording_404_yields_not_che
 
 
 # ============================================================================================
-# Регресс — граница `--chunk` вне диапазона + умолчание-включено + `--json`
+# NFR17-AC5 (ADR-024 Д3, issue #9) — `--chunk` вне диапазона: сверка не оплачивается,
+# сигнал `not_checked`/`chunk_out_of_range` не теряется сборкой `--json`
 # ============================================================================================
 
 
 @pytest.mark.httpx_mock(assert_all_responses_were_requested=False)
-def test_nfr17_out_of_range_chunk_with_default_verify_does_not_crash_on_json_parse(
+def test_nfr17_ac5_out_of_range_chunk_with_default_verify_skips_network_call_and_signals_not_checked(
     httpx_mock: HTTPXMock, monkeypatch, capsys
 ):
-    """Companion-спека, «Оркестрация», edge case: `render_transcript_output` при
-    `--chunk N` вне диапазона отдаёт НЕСТРОГО-JSON текст ("Чанк N не существует...")
-    — `json.loads` этого текста бросает исключение; наивная реализация обёртки
-    `{"transcript": parsed, "identity_check": ...}` крашится на этом пути. Ожидание:
-    команда не падает (`rc == 0`), сообщение о несуществующем чанке доходит до
-    пользователя как есть."""
+    """ПРАВКА КОНТРАКТА (не регресс — ADR-024 Д3 отменяет прежнее поведение,
+    называвшееся issue #9 недостаточным): старый тест
+    (`test_nfr17_out_of_range_chunk_with_default_verify_does_not_crash_on_json_parse`)
+    закреплял РОВНО ДВА сетевых вызова (транскрипт + `get_recording`) и печать
+    НЕСТРОГО-JSON текста "Чанк N не существует..." как есть — то самое тихое
+    выбрасывание уже вычисленного `identity_check`, которое Д3 устраняет. Старое
+    утверждение: `len(httpx_mock.get_requests()) == 2` и `rc == 0` без проверки формы
+    JSON. Новое: `get_recording` НЕ вызывается вовсе (0, не 2 вызова на сверку —
+    сетевая цена не оплачивается на заведомо неверном чанке), а `--json`-вывод —
+    валидный JSON с явным `identity_check.result == "not_checked"`,
+    `reason == "chunk_out_of_range"`, отличимым от `match`."""
     key = "REC-1"
     httpx_mock.add_response(
         json={"status": "complete", "tracks": []}, url=_transcript_url_re(key)
     )
+    # get_recording МОК присутствует специально: если реализация (сегодняшняя,
+    # непочиненная) всё же вызовет его — вызов должен УСПЕШНО пройти и быть
+    # засчитан `_count_recording_calls`, а не свалить тест сторонней ошибкой
+    # pytest_httpx «нет зарегистрированного ответа».
     httpx_mock.add_response(
-        json={"id": key, "participants": []}, url=_recording_url_re(key)
+        json={"id": key, "participants": [{"userInfo": {"key": "u1"}}]},
+        url=_recording_url_re(key),
     )
 
     rc = _run(
@@ -454,12 +529,211 @@ def test_nfr17_out_of_range_chunk_with_default_verify_does_not_crash_on_json_par
     )
     raw = capsys.readouterr().out
 
-    assert len(httpx_mock.get_requests()) == 2, (
-        "NFR17 (edge case чанкинга, умолчание-включено): сверка обязана произойти "
-        f"даже на этом пути (два вызова), фактически {len(httpx_mock.get_requests())}"
+    assert rc == 0, (
+        f"NFR17-AC5: чанк вне диапазона — usage error нет, команда не должна "
+        f"падать, stdout: {raw!r}"
     )
-    assert rc == 0, f"NFR17 (edge case чанкинга): команда не должна падать, stdout: {raw!r}"
+    assert _count_recording_calls(httpx_mock, key) == 0, (
+        "NFR17-AC5 (ADR-024 Д3): `--chunk` вне диапазона НЕ должен запускать сверку "
+        f"по сети вовсе — фактически вызовов get_recording: "
+        f"{_count_recording_calls(httpx_mock, key)}"
+    )
+
+    try:
+        out = json.loads(raw)
+    except json.JSONDecodeError:
+        pytest.fail(
+            "NFR17-AC5 (замаскированный отказ до правки): `--json`-вывод на чанке "
+            f"вне диапазона обязан быть валидным JSON-конвертом, а не нестрого-JSON "
+            f"текстом сообщения — получено {raw!r}"
+        )
+
+    identity_check = out.get("identity_check")
+    assert identity_check is not None, (
+        f"NFR17-AC5 (замаскированный отказ): `identity_check` не должен тихо "
+        f"пропадать при сборке `--json` на этой ветке, получено {out}"
+    )
+    assert identity_check["result"] == "not_checked", (
+        f"NFR17-AC5: чанк вне диапазона -> `not_checked`, получено {identity_check}"
+    )
+    assert identity_check.get("reason") == "chunk_out_of_range", (
+        "NFR17-AC5: причина обязана называть именно чанк вне диапазона (переиспользуя "
+        f"словарь исходов `not_checked`, ADR-024 §Д3), получено {identity_check}"
+    )
+    assert identity_check["result"] != "match", (
+        "NFR17-AC5 (замаскированный отказ): пропуск сверки не должен путаться с "
+        "успешным совпадением"
+    )
+    assert "error" in out and "99" in out["error"], (
+        f"сообщение о несуществующем чанке обязано дойти до пользователя под ключом "
+        f"`error`, получено {out}"
+    )
+
+
+@pytest.mark.httpx_mock(assert_all_responses_were_requested=False)
+def test_nfr17_malformed_negative_chunk_index_also_skips_network_call_and_signals_not_checked(
+    httpx_mock: HTTPXMock, monkeypatch, capsys
+):
+    """Класс «испорченный/опечатанный ввод» для NFR17-AC5: `--chunk -1` — не просто
+    большое число вне диапазона, а структурно бессмысленное значение (пользователь
+    мог опечататься, введя отрицательный номер) — обязано давать тот же честный
+    исход, что и положительное значение вне диапазона, не отдельную непроверенную
+    ветку (например, не должно случайно попасть в валидный `chunk_index` через
+    Python-семантику отрицательной индексации где-то в реализации)."""
+    key = "REC-1"
+    httpx_mock.add_response(
+        json={"status": "complete", "tracks": []}, url=_transcript_url_re(key)
+    )
+    httpx_mock.add_response(
+        json={"id": key, "participants": [{"userInfo": {"key": "u1"}}]},
+        url=_recording_url_re(key),
+    )
+
+    rc = _run(
+        ["get-transcript", key, "--json", "--chunk", "-1", "--chunk-size", "10"], monkeypatch
+    )
+    raw = capsys.readouterr().out
+
+    assert rc == 0
+    assert _count_recording_calls(httpx_mock, key) == 0, (
+        "NFR17-AC5 (испорченный ввод, отрицательный чанк): сверка не должна "
+        f"запускаться, фактически вызовов get_recording: "
+        f"{_count_recording_calls(httpx_mock, key)}"
+    )
+    out = json.loads(raw)
+    assert out.get("identity_check", {}).get("reason") == "chunk_out_of_range", (
+        f"отрицательный `--chunk` обязан классифицироваться как вне диапазона, "
+        f"получено {out}"
+    )
+
+
+@pytest.mark.httpx_mock(assert_all_responses_were_requested=False)
+def test_nfr17_out_of_range_chunk_with_no_verify_identity_is_unaffected_by_hardening(
+    httpx_mock: HTTPXMock, monkeypatch, capsys
+):
+    """Регресс-guard (companion-спека, «Edge cases»): `--no-verify-identity` +
+    `--chunk` вне диапазона — поведение НЕ меняется ADR-024 Д3 (сверка и без того
+    отключена явным флагом, `identity_check` не появляется вовсе); ожидание — уже
+    верно на сегодняшнем дереве, тест закрепляет это (green guard), не проектирует
+    новое поведение."""
+    key = "REC-1"
+    httpx_mock.add_response(
+        json={"status": "complete", "tracks": []}, url=_transcript_url_re(key)
+    )
+
+    rc = _run(
+        [
+            "get-transcript",
+            key,
+            "--json",
+            "--chunk",
+            "99",
+            "--chunk-size",
+            "10",
+            "--no-verify-identity",
+        ],
+        monkeypatch,
+    )
+    raw = capsys.readouterr().out
+
+    assert rc == 0
+    assert _count_recording_calls(httpx_mock, key) == 0, (
+        "`--no-verify-identity`: сверка не должна запускаться независимо от чанка"
+    )
+    assert "identity_check" not in raw, (
+        f"`--no-verify-identity`: `identity_check` не должен появляться вовсе, "
+        f"получено {raw!r}"
+    )
     assert "не существует" in raw, (
         f"сообщение о несуществующем чанке должно дойти до пользователя как есть, "
         f"получено: {raw!r}"
     )
+
+
+# ============================================================================================
+# NFR17-AC5, unit — `formatters.resolve_chunk_range` (новая чистая функция, ADR-024 §3)
+# ============================================================================================
+
+
+def _five_entry_raw_transcript() -> dict:
+    """5 треков по одной реплике из 30 символов -> с `chunk_size=80` даёт РОВНО 5
+    raw-чанков (проверено на сегодняшнем `chunk_transcript_raw`, до правки —
+    фикстура объективна, не подогнана под ожидаемый ответ новой функции)."""
+    tracks = []
+    for i in range(5):
+        tracks.append(
+            {
+                "speaker": {"userInfo": {"key": f"u{i}"}, "isAnonymous": False},
+                "chunks": [{"startTimeOffsetInMillis": i * 1000, "text": "x" * 30}],
+            }
+        )
+    return {"status": "complete", "tracks": tracks}
+
+
+def test_nfr17_ac5_resolve_chunk_range_reports_in_range_for_a_middle_chunk():
+    from ktalk_cli.formatters import resolve_chunk_range
+
+    data = _five_entry_raw_transcript()
+
+    in_range, total_chunks = resolve_chunk_range(data, "raw", 3, 80)
+
+    assert total_chunks == 5, f"фикстура даёт 5 raw-чанков, получено {total_chunks}"
+    assert in_range is True, "чанк 3 из 5 — валидный номер, ожидался in_range=True"
+
+
+def test_nfr17_ac5_resolve_chunk_range_boundary_last_valid_chunk_is_in_range():
+    from ktalk_cli.formatters import resolve_chunk_range
+
+    data = _five_entry_raw_transcript()
+
+    in_range, total_chunks = resolve_chunk_range(data, "raw", 5, 80)
+
+    assert total_chunks == 5
+    assert in_range is True, (
+        "граница: последний валидный номер чанка (== total_chunks) обязан быть "
+        "in_range=True"
+    )
+
+
+def test_nfr17_ac5_resolve_chunk_range_one_past_last_chunk_is_out_of_range():
+    from ktalk_cli.formatters import resolve_chunk_range
+
+    data = _five_entry_raw_transcript()
+
+    in_range, total_chunks = resolve_chunk_range(data, "raw", 6, 80)
+
+    assert total_chunks == 5
+    assert in_range is False, (
+        "граница: total_chunks + 1 обязан быть out_of_range — ровно этот случай "
+        "воспроизводит issue #9"
+    )
+
+
+def test_nfr17_ac5_resolve_chunk_range_auto_chunk_zero_maps_to_first_chunk():
+    """`--chunk 0` (умолчание, «авто») -> при тексте длиннее `chunk_size` эквивалентен
+    первому чанку, та же семантика, что `render_transcript_output` сегодня
+    (`chunk_index = 0 if chunk == 0 else chunk - 1`) — новая функция не должна менять
+    этот выбор, только вынести его в переиспользуемую форму."""
+    from ktalk_cli.formatters import resolve_chunk_range
+
+    data = _five_entry_raw_transcript()
+
+    in_range, total_chunks = resolve_chunk_range(data, "raw", 0, 80)
+
+    assert total_chunks == 5
+    assert in_range is True, "`--chunk 0` при длинном тексте обязан маппиться на первый чанк"
+
+
+def test_nfr17_malformed_resolve_chunk_range_negative_chunk_is_out_of_range():
+    """Класс «испорченный/опечатанный ввод» на уровне чистой функции: отрицательный
+    номер чанка — не «просто больше total_chunks», а сам по себе структурно
+    невалидный ввод; не должен случайно стать валидным через Python-семантику
+    отрицательной индексации где-то в реализации `resolve_chunk_range`."""
+    from ktalk_cli.formatters import resolve_chunk_range
+
+    data = _five_entry_raw_transcript()
+
+    in_range, total_chunks = resolve_chunk_range(data, "raw", -1, 80)
+
+    assert total_chunks == 5
+    assert in_range is False, f"отрицательный чанк обязан быть out_of_range, total_chunks={total_chunks}"
